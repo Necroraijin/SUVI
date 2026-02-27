@@ -1,0 +1,38 @@
+name: Deploy Vertex AI Agents
+
+on:
+  push:
+    paths:
+      - 'agents/**'
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy-agents:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Google Auth
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
+        service_account: '${{ secrets.GCP_SA_EMAIL }}'
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Google Cloud & ADK SDKs
+      run: |
+        pip install google-cloud-aiplatform google-genai
+
+    - name: Execute Deployment Script
+      run: |
+        python scripts/deploy_agents.py

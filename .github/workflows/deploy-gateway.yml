@@ -1,0 +1,45 @@
+name: Deploy Cloud Run Gateway
+
+on:
+  push:
+    paths:
+      - 'apps/gateway/**'
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: your-gcp-project-id
+  REGION: us-central1
+  SERVICE: suvi-gateway
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Google Auth
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
+        service_account: '${{ secrets.GCP_SA_EMAIL }}'
+
+    - name: Build and Push Container
+      run: |
+        gcloud auth configure-docker $REGION-docker.pkg.dev
+        docker build -t $REGION-docker.pkg.dev/$PROJECT_ID/suvi-repo/$SERVICE apps/gateway/
+        docker push $REGION-docker.pkg.dev/$PROJECT_ID/suvi-repo/$SERVICE
+
+    - name: Deploy to Cloud Run
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        service: ${{ env.SERVICE }}
+        region: ${{ env.REGION }}
+        image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/suvi-repo/${{ env.SERVICE }}
