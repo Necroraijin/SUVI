@@ -1,0 +1,5 @@
+[project]
+name = "suvi-desktop"
+version = "3.0.0"
+description = "SUVI Desktop Client"
+# Dependencies are managed by the root pyproject.toml

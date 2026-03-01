@@ -1,0 +1,9 @@
+{
+  "agent_name": "suvi_code_agent",
+  "description": "Specialized worker agent for writing code and manipulating the local file system.",
+  "version": "1.0.0",
+  "author": "SUVI Core Engineering",
+  "type": "worker",
+  "capabilities": ["code_generation", "file_reading", "file_writing"],
+  "required_apis": ["vertex_ai_generative_language"]
+}

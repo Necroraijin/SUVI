@@ -1,0 +1,18 @@
+{
+  "agent_name": "suvi_master_orchestrator",
+  "description": "The central routing and planning intelligence for the SUVI OS.",
+  "version": "1.0.0",
+  "author": "SUVI Core Engineering",
+  "type": "supervisor",
+  "capabilities": [
+    "intent_classification",
+    "task_delegation",
+    "multi_step_planning",
+    "output_validation"
+  ],
+  "required_apis": [
+    "vertex_ai_generative_language",
+    "firestore",
+    "bigquery"
+  ]
+}

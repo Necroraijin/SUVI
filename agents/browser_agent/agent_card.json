@@ -1,0 +1,15 @@
+{
+  "agent_name": "suvi_browser_agent",
+  "description": "Specialized worker agent for executing web searches and extracting DOM content via local Playwright.",
+  "version": "1.0.0",
+  "author": "SUVI Core Engineering",
+  "type": "worker",
+  "capabilities": [
+    "web_navigation",
+    "dom_extraction",
+    "search_query_formatting"
+  ],
+  "required_apis": [
+    "vertex_ai_generative_language"
+  ]
+}
