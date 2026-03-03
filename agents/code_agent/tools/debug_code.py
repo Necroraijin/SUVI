@@ -4,4 +4,5 @@ def debug_existing_code(code_snippet: str, error_message: str) -> str:
     """
     print(f"[Tool: debug_code] Analyzing error: {error_message}")
     
-    return f"# Fix for error: {error_message}\n# Note: Check async event loop initialization and imports."
+    # Simulated analysis response
+    return f"# Analysis of error: {error_message}\n# Suggestion: Verify your imports and check for unhandled exceptions."

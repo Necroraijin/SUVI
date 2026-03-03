@@ -1,18 +1,20 @@
 import json
-from agents.shared import A2AClient, AgentResponse
-from agents.shared.telemetry import TelemetryLogger
+import time
+from agents.shared import A2AClient, TelemetryLogger
+from shared.suvi_types import AgentResult, AgentResultStatus
 
 class TaskRouter:
     """Analyzes the user's input and routes it to the correct specialized sub-agent."""
     
     def __init__(self):
-        # Initialize internal communication lines to the sub-agents
-        self.code_agent = A2AClient("Agent_Code")
-        self.browser_agent = A2AClient("Agent_Browser")
-        self.file_agent = A2AClient("Agent_FileSystem")
+        # Initialize internal communication lines to the sub-agents with correct server URLs
+        self.code_agent = A2AClient("CodeAgent", agent_url="http://localhost:8003")
+        self.browser_agent = A2AClient("BrowserAgent", agent_url="http://localhost:8004")
+        # Currently no dedicated file agent A2AServer, routing to CodeAgent for file logic for now
+        self.file_agent = A2AClient("FileSystemAgent", agent_url="http://localhost:8003") 
         self.telemetry = TelemetryLogger()
 
-    async def route_request(self, user_prompt: str, context: dict) -> AgentResponse:
+    async def route_request(self, user_prompt: str, context: dict) -> AgentResult:
         """Determines the intent and dispatches the task."""
         
         # In a full Vertex AI implementation, we would use Gemini to classify the intent.
@@ -20,7 +22,6 @@ class TaskRouter:
         
         prompt_lower = user_prompt.lower()
         target_agent = None
-        task = user_prompt
         
         # 1. Intent Classification
         if any(keyword in prompt_lower for keyword in ["code", "script", "debug", "python"]):
@@ -34,20 +35,22 @@ class TaskRouter:
             
         else:
             # If no specific agent is needed, the Orchestrator handles it directly
-            return AgentResponse(
-                status="success",
-                result="I can answer that directly.",
-                data={"direct_reply": True}
+            return AgentResult(
+                agent_type="orchestrator",
+                task_id="direct_reply",
+                status=AgentResultStatus.SUCCESS,
+                output="I can answer that directly.",
+                artifacts={"direct_reply": True}
             )
 
         # 2. Dispatch Task
         print(f"[Router] Intent classified. Routing to {target_agent.agent_name}...")
         
         # Start telemetry timer
-        import time
         start_time = time.time()
         
-        response = await target_agent.send_task(target_agent.agent_name, task, context)
+        # Use updated A2AClient send_task which returns AgentResult
+        response = await target_agent.send_task(target_agent.agent_name, user_prompt, context)
         
         # Log the latency
         latency = (time.time() - start_time) * 1000

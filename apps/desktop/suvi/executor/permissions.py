@@ -1,22 +1,39 @@
-import json
-from pathlib import Path
+from shared.suvi_types import PermissionTier, ActionType
 
 class PermissionManager:
-    """Stores and checks user-approved permissions for high-risk actions."""
-    def __init__(self, config_file="suvi_permissions.json"):
-        self.config_path = Path(config_file)
-        self.allowed_actions = self._load()
+    """Standardized permission tier mapping and enforcement."""
+    
+    # Map Tool Names to Tiers
+    TOOL_TIERS = {
+        # Tier 0 - Observe
+        "screenshot": PermissionTier.TIER_0_OBSERVE,
+        "browser_read": PermissionTier.TIER_0_OBSERVE,
+        "clipboard_read": PermissionTier.TIER_0_OBSERVE,
+        
+        # Tier 1 - Interact
+        "mouse_click": PermissionTier.TIER_1_INTERACT,
+        "type_text": PermissionTier.TIER_1_INTERACT,
+        "press_hotkey": PermissionTier.TIER_1_INTERACT,
+        "scroll": PermissionTier.TIER_1_INTERACT,
+        
+        # Tier 2 - Operate
+        "launch_app": PermissionTier.TIER_2_OPERATE,
+        "clipboard_write": PermissionTier.TIER_2_OPERATE,
+        
+        # Tier 3 - Modify (Requires Confirmation)
+        "write_file": PermissionTier.TIER_3_MODIFY,
+        "delete_file": PermissionTier.TIER_3_MODIFY,
+        "execute_script": PermissionTier.TIER_3_MODIFY,
+        "close_app": PermissionTier.TIER_3_MODIFY,
+        
+        # Tier 4 - System (Highest Risk)
+        "network_config": PermissionTier.TIER_4_SYSTEM,
+    }
 
-    def _load(self):
-        if self.config_path.exists():
-            return json.loads(self.config_path.read_text())
-        # Default strict permissions
-        return {
-            "auto_click": True, 
-            "file_read": True,
-            "file_write": False, 
-            "shell_execute": False
-        }
+    @staticmethod
+    def get_tier(tool_name: str) -> PermissionTier:
+        return PermissionManager.TOOL_TIERS.get(tool_name, PermissionTier.TIER_3_MODIFY)
 
-    def has_permission(self, action: str) -> bool:
-        return self.allowed_actions.get(action, False)
+    @staticmethod
+    def requires_confirmation(tier: PermissionTier) -> bool:
+        return tier >= PermissionTier.TIER_3_MODIFY

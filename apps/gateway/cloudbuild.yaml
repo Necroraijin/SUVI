@@ -1,0 +1,26 @@
+steps:
+  # Step 1: Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/suvi-gateway', './suvi_gateway']
+
+  # Step 2: Push the image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/suvi-gateway']
+
+  # Step 3: Deploy the image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'suvi-gateway'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/suvi-gateway'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated' # Allows public access to the endpoints
+      - '--port'
+      - '8080'
+
+images:
+  - 'gcr.io/$PROJECT_ID/suvi-gateway'

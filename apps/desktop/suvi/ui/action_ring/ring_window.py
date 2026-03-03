@@ -65,14 +65,21 @@ class RingWindow(QWidget):
 
     # --- Interaction & Drawing ---
 
-    def _on_ring_clicked(self):
-        # Triggered by the DragHandler if it was a clean tap
-        if self.state == RingState.IDLE:
-            self.state = RingState.LISTENING
-        else:
-            self.state = RingState.IDLE
+    def set_state(self, new_state: RingState):
+        """External entry point to drive the ring's visual state."""
+        if self.state == new_state:
+            return
             
+        print(f"[RingWindow] Transitioning state: {self.state.name} -> {new_state.name}")
+        self.state = new_state
         self.animator.transition_to(self.state)
+
+    def _on_ring_clicked(self):
+        # Toggle between IDLE and LISTENING on manual click
+        if self.state == RingState.IDLE:
+            self.set_state(RingState.LISTENING)
+        else:
+            self.set_state(RingState.IDLE)
 
     def paintEvent(self, event):
         painter = QPainter(self)

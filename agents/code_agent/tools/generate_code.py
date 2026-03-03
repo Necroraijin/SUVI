@@ -1,9 +1,14 @@
-def generate_new_code(prompt: str, language: str = "python") -> str:
+def generate_new_code(prompt: str, language: str = "python") -> dict:
     """
-    Tool for the Code Agent to generate brand new scripts or classes from scratch.
+    Tool to command the LLM to generate code from scratch based on a description.
     """
-    print(f"[Tool: generate_code] Writing {language} code for: {prompt}")
+    print(f"[Tool: generate_code] Writing new {language} code for: {prompt}")
     
-    # In full deployment, the agent relies on its native LLM generation for this,
-    # but having it as an explicit tool helps the Orchestrator track the action.
-    return f"# Generated {language} code for: {prompt}\n\ndef generated_function():\n    pass\n"
+    # In a full Vertex deployment, the agent uses its generative capabilities directly.
+    # This tool format tells the desktop to wait for the LLM output and write it.
+    mock_code = f"# Generated {language} script for: {prompt}\n\ndef main():\n    pass\n"
+    
+    return {
+        "action": "write_file",
+        "args": {"file_path": "generated_script.py", "content": mock_code}
+    }

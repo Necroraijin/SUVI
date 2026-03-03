@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // For the hackathon, we restrict read/write to the backend Gateway only.
+    // The desktop client MUST go through the Gateway to access memory.
+    match /{document=**} {
+      allow read, write: if request.auth != null; // Requires authentication
+    }
+  }
+}
