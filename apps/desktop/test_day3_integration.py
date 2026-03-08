@@ -1,46 +1,48 @@
 import asyncio
 import os
+import sys
+import uvicorn
+import json
+import time
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from PyQt6.QtCore import QCoreApplication
+from PyQt6.QtWidgets import QApplication
+import qasync
 import sounddevice as sd
 
-from PyQt6.QtWidgets import QApplication
+# Ensure project root and suvi module can be imported
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
-from apps.desktop.suvi.ui.widget.chat_widget import ChatWidget
 from apps.desktop.suvi.workers.voice_worker import VoiceWorker
 from apps.desktop.suvi.workers.wake_word_worker import WakeWordWorker
 from apps.desktop.suvi.workers.replay_worker import ReplayWorker
 from apps.desktop.suvi.services.live_session import GeminiLiveService
 from apps.desktop.suvi.services.computer_use_service import ComputerUseService
+from apps.desktop.suvi.ui.widget.chat_widget import ChatWidget
 
-class SUVIApplication:
-    """
-    The main controller for the SUVI Desktop Application.
-    Manages the UI, background workers, and AI service connections.
-    """
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.ui = None
-        self.live_service = None
-        self.computer_service = None
-        
+load_dotenv()
+
+class IntegrationController:
+    def __init__(self, ui_widget, voice_client, vision_client, orchestrator_client):
+        self.ui = ui_widget
+        self.live_service = GeminiLiveService(voice_client)
+        self.computer_service = ComputerUseService(vision_client)
+        self.orchestrator_client = orchestrator_client
         self.voice_worker = VoiceWorker()
         self.wake_word_worker = WakeWordWorker()
         self.replay_worker = ReplayWorker()
         
-        # Audio output stream for TTS playback
         self.speaker_stream = sd.RawOutputStream(
             samplerate=24000,
             channels=1,
             dtype='int16'
         )
-
-    def init_services(self):
-        print("✅ Initializing AI Services...")
-        # Note: Using v1alpha for native-audio and computer-use preview access
-        client = genai.Client(api_key=self.api_key, http_options={'api_version': 'v1alpha'})
-        self.live_service = GeminiLiveService(client)
-        self.computer_service = ComputerUseService(client)
+        self.speaker_stream.start()
+        self._setup_connections()
 
     def _setup_connections(self):
         # Wake Word
@@ -67,13 +69,17 @@ class SUVIApplication:
         self.ui.update_state("idle")
         self.ui.update_transcript("Session stopped. Waiting for 'Hey SUVI'...")
         
+        # Stop background tasks
         self.computer_service.interrupt()
         
+        # Stop the microphone
         if self.voice_worker.isRunning():
             self.voice_worker.stop()
             
+        # Close the WebSocket connection to save tokens and stop the agent loop
         asyncio.create_task(self.live_service.stop())
 
+        # Start listening for the wake word again
         if not self.wake_word_worker.isRunning():
             self.wake_word_worker.start()
 
@@ -81,21 +87,25 @@ class SUVIApplication:
         """Starts the active session (triggered by wake word)"""
         print("\n🟢 Wake word detected! Starting session...")
         
+        # Stop wake word listener so they don't clash on the microphone
         if self.wake_word_worker.isRunning():
             self.wake_word_worker.stop()
 
         self.ui.update_state("listening")
         self.ui.update_transcript("How can I help you?")
         
+        # Start mic
         if not self.voice_worker.isRunning():
             self.voice_worker.start()
             
-        asyncio.create_task(self.live_service.start(user_profile={"name": "User"}))
+        # Start WebSocket
+        asyncio.create_task(self.live_service.start(user_profile={"name": "Sumit"}))
 
     def _on_mic_audio(self, pcm_chunk: bytes):
         asyncio.create_task(self.live_service.send_audio_chunk(pcm_chunk))
 
     def _on_amplitude(self, amp: float):
+        # We could use this to animate a waveform later
         pass
 
     def _on_transcript(self, text: str, is_final: bool):
@@ -123,18 +133,19 @@ class SUVIApplication:
         # Start a new replay session
         self.replay_worker.set_session(call_id)
         
+        # Connect the screenshot callback to the replay worker
         def on_screenshot(img_bytes):
             self.replay_worker.add_frame(img_bytes)
 
         result = await self.computer_service.execute_task(
             intent=intent,
-            user_id="suvi_user",
-            session_id="suvi_session",
+            user_id="test_user",
+            session_id="test_session",
             on_action=lambda d: self.ui.update_transcript(f"Action: {d}"),
             on_screenshot=on_screenshot
         )
         
-        # Save the GIF
+        # Save the GIF in the background
         self.replay_worker.start()
         
         response = types.FunctionResponse(
@@ -153,25 +164,12 @@ class SUVIApplication:
         )
         await self.live_service.send_tool_response([response])
 
-    async def start(self):
-        print("Starting SUVI Desktop Application...")
-        
-        # Initialize Services
-        self.init_services()
-        
-        # Initialize UI
-        self.ui = ChatWidget()
-        self.ui.show()
-        
-        # Wire it all together
-        self._setup_connections()
-        
-        self.speaker_stream.start()
-
+    async def run(self):
+        print("\n🚀 Starting Full SUVI System with UI...")
         self.ui.update_state("idle")
         self.ui.update_transcript("Waiting for wake word ('Hey SUVI')...")
         
-        # Start listening for the wake word
+        # Start only the wake word listener initially
         self.wake_word_worker.start()
         
         try:
@@ -182,6 +180,32 @@ class SUVIApplication:
         finally:
             self.wake_word_worker.stop()
             self.voice_worker.stop()
-            if self.live_service:
-                await self.live_service.stop()
+            await self.live_service.stop()
             self.speaker_stream.stop()
+
+def main():
+    # Setup PyQt Application for UI
+    app = QApplication(sys.argv)
+    loop = qasync.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
+    # Initialize the Widget
+    widget = ChatWidget()
+    widget.show()
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
+
+    controller = IntegrationController(widget, client, client, client)
+
+    # Run Controller loop
+    with loop:
+        try:
+            # ensure_future allows the Qt event loop to keep running
+            asyncio.ensure_future(controller.run())
+            loop.run_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down integration test...")
+
+if __name__ == "__main__":
+    main()

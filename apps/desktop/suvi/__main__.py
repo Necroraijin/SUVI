@@ -1,10 +1,26 @@
 import sys
+import os
 import asyncio
 import qasync
 from PyQt6.QtWidgets import QApplication
-from suvi.app import SUVIApplication
+from dotenv import load_dotenv
+
+# Ensure the root directory is accessible for imports
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+from apps.desktop.suvi.app import SUVIApplication
 
 def main():
+    # Load environment variables
+    load_dotenv(os.path.join(root_dir, '.env'))
+    api_key = os.getenv("GEMINI_API_KEY")
+    
+    if not api_key or api_key == "<your_key>":
+        print("❌ FATAL: GEMINI_API_KEY is not set in the .env file.")
+        sys.exit(1)
+
     # 1. Create the PyQt Application
     app = QApplication(sys.argv)
     
@@ -13,11 +29,16 @@ def main():
     asyncio.set_event_loop(loop)
     
     # 3. Initialize SUVI App
-    suvi_app = SUVIApplication()
+    suvi_app = SUVIApplication(api_key=api_key)
     
     # 4. Run the asyncio event loop
     with loop:
-        loop.run_until_complete(suvi_app.start())
+        try:
+            # We use ensure_future so the Qt UI renders while the async loop runs
+            asyncio.ensure_future(suvi_app.start())
+            loop.run_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down SUVI...")
 
 if __name__ == "__main__":
     main()

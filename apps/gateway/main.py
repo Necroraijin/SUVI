@@ -1,13 +1,19 @@
+import sys
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
-import os
 from dotenv import load_dotenv
 
-from routes import ws_proxy
-from services.firestore import FirestoreService
-from services.cloud_logging import ActionLogger
+# Ensure the project root is in the Python path
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+from apps.gateway.routes import ws_proxy
+from apps.gateway.services.firestore import FirestoreService
+from apps.gateway.services.cloud_logging import ActionLogger
 
 load_dotenv()
 

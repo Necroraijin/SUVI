@@ -4,7 +4,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from google import genai
 from google.genai import types
 
-from suvi.services.live_tools import get_function_declarations
+from apps.desktop.suvi.services.live_tools import get_function_declarations
 
 SUVI_SYSTEM_PROMPT = """You are SUVI — a precise, friendly AI assistant that controls the user's computer.
 

@@ -40,7 +40,7 @@ class ComputerUseService:
         self._interrupt_requested = True
 
     def _capture_screen(self) -> bytes:
-        """Capture screen as JPEG bytes for faster processing and lower latency."""
+        """Capture screen as PNG bytes (Required by Computer Use model)."""
         with mss.mss() as sct:
             frame = sct.grab(sct.monitors[1])
         img = Image.frombytes("RGB", frame.size, frame.bgra, "raw", "BGRX")
@@ -51,7 +51,7 @@ class ComputerUseService:
             img = img.resize((1366, int(1366 * h / w)), Image.Resampling.LANCZOS)
             
         buf = io.BytesIO()
-        img.save(buf, "JPEG", quality=80)
+        img.save(buf, "PNG", optimize=False)
         return buf.getvalue()
 
     async def execute_task(
@@ -72,7 +72,7 @@ class ComputerUseService:
                 Tool(
                     computer_use=ComputerUse(
                         environment=Environment.ENVIRONMENT_BROWSER,
-                        excluded_predefined_functions=["drag_and_drop"]
+                        excluded_predefined_functions=["drag_and_drop", "open_web_browser"]
                     )
                 )
             ]
@@ -94,7 +94,7 @@ class ComputerUseService:
                 role="user",
                 parts=[
                     Part(text=intent),
-                    Part.from_bytes(data=screenshot_bytes, mime_type="image/jpeg"),
+                    Part.from_bytes(data=screenshot_bytes, mime_type="image/png"),
                 ],
             )
         ]
@@ -108,15 +108,32 @@ class ComputerUseService:
 
             print(f"\n Turn {turn + 1}")
             
-            try:
-                response = await self.client.aio.models.generate_content(
-                    model=self.MODEL_ID, 
-                    contents=contents, 
-                    config=config
-                )
-            except Exception as e:
-                print(f"❗️ API Error: {e}")
-                return {"success": False, "reason": f"api_error: {e}", "actions_taken": actions_taken}
+            # Retry logic for 503 High Demand errors
+            max_retries = 3
+            retry_count = 0
+            response = None
+            
+            while retry_count < max_retries:
+                try:
+                    response = await self.client.aio.models.generate_content(
+                        model=self.MODEL_ID, 
+                        contents=contents, 
+                        config=config
+                    )
+                    break # Success, exit retry loop
+                except Exception as e:
+                    error_str = str(e)
+                    if "503" in error_str or "UNAVAILABLE" in error_str:
+                        retry_count += 1
+                        print(f"⏳ Google servers busy (503). Retrying in 3 seconds... ({retry_count}/{max_retries})")
+                        await asyncio.sleep(3)
+                    else:
+                        print(f"❗️ API Error: {e}")
+                        return {"success": False, "reason": f"api_error: {e}", "actions_taken": actions_taken}
+            
+            if not response:
+                print("❌ Failed after maximum retries due to server demand.")
+                return {"success": False, "reason": "api_error_503_max_retries", "actions_taken": actions_taken}
 
             if not response.candidates:
                 print("Model returned no candidates (safety filter?). Terminating.")
@@ -138,42 +155,67 @@ class ComputerUseService:
                     part.text for part in response.candidates[0].content.parts if hasattr(part, "text") and part.text
                 )
                 print(f"Agent Finished: {final_text}")
+                
+                # Save Memory to Firestore
+                try:
+                    if not self.firestore:
+                        from google.cloud import firestore
+                        import os
+                        project_id = os.getenv("GCP_PROJECT_ID")
+                        if project_id:
+                            self.firestore = firestore.AsyncClient(project=project_id)
+                    if self.firestore:
+                        from datetime import datetime
+                        doc_ref = self.firestore.collection("suvi_memory").document()
+                        await doc_ref.set({
+                            "user_id": user_id,
+                            "session_id": session_id,
+                            "timestamp": datetime.utcnow(),
+                            "intent": intent,
+                            "actions_taken": actions_taken,
+                            "status": "success",
+                        })
+                        print(f"💾 Memory saved to Firestore: {len(actions_taken)} actions.")
+                except Exception as e:
+                    print(f"⚠️ Failed to save memory to Firestore: {e}")
+                
                 return {"success": True, "actions_taken": actions_taken, "final_screenshot": screenshot_bytes}
 
             # Execute Actions
             status, execution_results = await self._execute_function_calls(response, on_action)
             
-            for name, _ in execution_results:
+            # Record actions
+            for call_id, name, result in execution_results:
                 actions_taken.append({"step": turn + 1, "action": name})
 
             if status == "NO_ACTION":
                 continue
 
             # 4. Capture New State and Create FunctionResponse
+            # We wait briefly so the UI can settle
+            await asyncio.sleep(0.5) 
+            screenshot_bytes = self._capture_screen()
+            if on_screenshot:
+                on_screenshot(screenshot_bytes)
+            
+            # Use raw dictionaries to avoid Pydantic union type mismatch errors
             function_response_parts = []
-            for name, result in execution_results:
-                # Capture new state after the action
-                await asyncio.sleep(0.2) # Faster UI settle wait
-                screenshot_bytes = self._capture_screen()
-                if on_screenshot:
-                    on_screenshot(screenshot_bytes)
-                
-                # Format exactly as the notebook requires
-                function_response_parts.append(
-                    Part(
-                        function_response=FunctionResponse(
-                            name=name,
-                            response={"result": result, "url": "desktop"}, # Mocking URL since we are on desktop
-                            parts=[
-                                Part(
-                                    inline_data=FunctionResponseBlob(
-                                        mime_type="image/jpeg", data=screenshot_bytes
-                                    )
-                                )
-                            ],
-                        )
-                    )
-                )
+            for call_id, name, result in execution_results:
+                function_response_parts.append({
+                    "function_response": {
+                        "id": call_id,
+                        "name": name,
+                        "response": {"result": result, "url": "desktop"},
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/png",
+                                    "data": screenshot_bytes
+                                }
+                            }
+                        ]
+                    }
+                })
                 
             # Append the user's feedback to history
             contents.append(Content(role="user", parts=function_response_parts))
@@ -181,7 +223,7 @@ class ComputerUseService:
 
         return {"success": False, "reason": "max_steps_reached", "actions_taken": actions_taken}
 
-    async def _execute_function_calls(self, response, on_action) -> Tuple[str, List[Tuple[str, str]]]:
+    async def _execute_function_calls(self, response, on_action) -> Tuple[str, List[Tuple[str, str, str]]]:
         """Extracts and executes PyAutoGUI function calls based on model response."""
         candidate = response.candidates[0]
         function_calls = []
@@ -203,6 +245,7 @@ class ComputerUseService:
         for call in function_calls:
             result = "success"
             action_desc = call.name
+            call_id = call.id if hasattr(call, 'id') and call.id else ""
             
             print(f"⚡ Executing Action: {call.name}")
             if on_action:
@@ -236,12 +279,12 @@ class ComputerUseService:
                     
                 else:
                     print(f"⚠️ Ignoring unsupported browser action: {call.name}")
-                    result = "success_ignored" # Don't crash on unsupported browser actions
+                    result = "success_ignored" 
                     
             except Exception as e:
                 print(f"❗️ Error executing {call.name}: {e}")
                 result = f"error: {str(e)}"
                 
-            results.append((call.name, result))
+            results.append((call_id, call.name, result))
             
         return "CONTINUE", results

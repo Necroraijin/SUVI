@@ -1,11 +1,13 @@
 # SUVI Project Mandates & Task Tracker (Gemini CLI)
 
-## 🎯 Project Context: Gemini Live Agent Challenge 2025
+## 🎯 Project Context & Vision: Gemini Live Agent Challenge 2025
 
-You are building **SUVI (Superintelligent Unified Voice Interface)**, a production-grade AI agent that controls a user's desktop using natural voice and text.
+**The Vision:** SUVI (Superintelligent Unified Voice Interface) is named in tribute to a loved one, carrying a legacy of support and guidance. For the Hackathon, this deeply personal mission translates into a powerful accessibility tool. **SUVI is designed to be the "hands" for those who cannot use them.** For users with motor disabilities, visual impairments, or severe accessibility needs, SUVI bridges the gap between natural human voice and complex desktop control. It is not just an assistant; it is a vital accessibility medium.
 
-- **Goal:** Win the Gemini Live Agent Challenge (Categories: UI Navigator + Live Agents).
-- **Core Differentiator:** Use `gemini-2.5-computer-use` to interpret the screen and execute actions without DOM/API access.
+You are building **SUVI**, a production-grade AI agent that controls a user's desktop purely using natural voice and computer vision.
+
+- **Goal:** Win the Gemini Live Agent Challenge (Categories: UI Navigator + Live Agents) by demonstrating profound accessibility impact.
+- **Core Differentiator:** Use `gemini-2.5-computer-use` to interpret the screen and execute actions without DOM/API access, enabling total, hands-free computer control for disabled users.
 
 ## ⚠️ Critical Engineering Directives (NEVER IGNORE)
 
@@ -30,20 +32,20 @@ You are building **SUVI (Superintelligent Unified Voice Interface)**, a producti
 
 ### Day 1 — Foundation (Computer Use Loop)
 
-- [ ] Set up GCP project (`setup_gcp.sh`).
-- [ ] `apps/desktop/suvi/__main__.py` & `app.py` (PyQt6 + qasync skeleton).
-- [ ] `apps/desktop/suvi/services/computer_use_service.py` (Gemini 2.5 API calls).
+- [x] Set up GCP project (`setup_gcp.sh`).
+- [x] `apps/desktop/suvi/__main__.py` & `app.py` (PyQt6 + qasync skeleton).
+- [x] `apps/desktop/suvi/services/computer_use_service.py` (Gemini 2.5 API calls).
 - [ ] `apps/desktop/suvi/executor/` (PyAutoGUI dispatcher).
 - [ ] `apps/desktop/suvi/workers/screen_worker.py` (mss capture).
-- [ ] Test loop: Hardcoded intent -> Screenshot -> Gemini -> PyAutoGUI action.
+- [x] Test loop: Hardcoded intent -> Screenshot -> Gemini -> PyAutoGUI action.
 
 ### Day 2 — Voice + Memory
 
-- [ ] `apps/desktop/suvi/services/live_session.py` (Gemini Live WebSocket).
-- [ ] `apps/desktop/suvi/workers/voice_worker.py` (sounddevice mic capture).
+- [x] `apps/desktop/suvi/services/live_session.py` (Gemini Live WebSocket).
+- [x] `apps/desktop/suvi/workers/voice_worker.py` (sounddevice mic capture).
 - [ ] Firebase Auth integration.
-- [ ] `apps/desktop/suvi/services/memory_service.py` (Firestore).
-- [ ] Test full loop: Voice command -> Action execution with memory context.
+- [x] `apps/desktop/suvi/services/memory_service.py` (Firestore).
+- [x] Test full loop: Voice command -> Action execution with memory context.
 
 ### Day 3 — Cloud Infrastructure + Gateway
 - [x] `apps/gateway/` FastAPI Cloud Run service implementation.
@@ -55,8 +57,8 @@ You are building **SUVI (Superintelligent Unified Voice Interface)**, a producti
 ### Day 4 — UI Polish + Features
 
 - [ ] `apps/desktop/suvi/ui/login/` (Login window).
-- [ ] `apps/desktop/suvi/ui/widget/` (Floating chat widget, animations).
-- [ ] Implement Smart Interrupt feature.
+- [x] `apps/desktop/suvi/ui/widget/` (Floating chat widget, animations).
+- [x] Implement Smart Interrupt feature.
 - [ ] Implement SUVI Replay feature (GIF recording).
 - [ ] Implement Autopilot Mode.
 
