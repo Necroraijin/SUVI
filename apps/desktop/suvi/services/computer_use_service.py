@@ -11,6 +11,8 @@ import pyautogui
 import mss
 from PIL import Image
 
+from apps.desktop.suvi.executor.dispatcher import ActionDispatcher
+
 class ComputerUseService:
     """
     Drives the Gemini Computer Use model via Vertex AI.
@@ -20,20 +22,14 @@ class ComputerUseService:
     # Using the Gemini 3 Flash Preview as supported by the notebook
     MODEL_ID = "gemini-3-flash-preview"
 
-    def __init__(self, client: genai.Client, firestore_service=None, logger=None):
+    def __init__(self, client: genai.Client, ui_widget=None, firestore_service=None, logger=None):
         self.client = client
         self.firestore = firestore_service
         self.logger = logger
         self._interrupt_requested = False
         
-        # Determine screen resolution once for normalization
-        self.screen_width, self.screen_height = pyautogui.size()
-
-    def _normalize_x(self, x: int) -> int:
-        return int(x / 1000 * self.screen_width)
-
-    def _normalize_y(self, y: int) -> int:
-        return int(y / 1000 * self.screen_height)
+        # Security: Use the dispatcher for all physical actions
+        self.dispatcher = ActionDispatcher(ui_widget)
 
     def interrupt(self):
         """Called when user says 'stop' or clicks cancel."""
@@ -53,6 +49,35 @@ class ComputerUseService:
         buf = io.BytesIO()
         img.save(buf, "PNG", optimize=False)
         return buf.getvalue()
+
+    async def describe_screen(self) -> str:
+        """
+        Captures the screen and uses the vision model to provide a 
+        vivid, helpful description for visually impaired users.
+        """
+        screenshot_bytes = self._capture_screen()
+        
+        prompt = """Describe this desktop screen in detail for a blind user.
+Mention open windows, visible text, icons on the taskbar, and any notifications.
+Be spatial (e.g., 'On the top right, there is a close button').
+Be a helpful companion."""
+
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.MODEL_ID,
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png"),
+                            types.Part.from_text(text=prompt)
+                        ]
+                    )
+                ]
+            )
+            return response.text
+        except Exception as e:
+            return f"I'm sorry, I'm having trouble seeing the screen right now. Error: {e}"
 
     async def execute_task(
         self,
@@ -181,7 +206,7 @@ class ComputerUseService:
                 
                 return {"success": True, "actions_taken": actions_taken, "final_screenshot": screenshot_bytes}
 
-            # Execute Actions
+            # Execute Actions via the Dispatcher
             status, execution_results = await self._execute_function_calls(response, on_action)
             
             # Record actions
@@ -224,7 +249,7 @@ class ComputerUseService:
         return {"success": False, "reason": "max_steps_reached", "actions_taken": actions_taken}
 
     async def _execute_function_calls(self, response, on_action) -> Tuple[str, List[Tuple[str, str, str]]]:
-        """Extracts and executes PyAutoGUI function calls based on model response."""
+        """Extracts and executes function calls via the secure dispatcher."""
         candidate = response.candidates[0]
         function_calls = []
         thoughts = []
@@ -243,47 +268,14 @@ class ComputerUseService:
 
         results = []
         for call in function_calls:
-            result = "success"
-            action_desc = call.name
+            print(f"⚡ Requesting Action: {call.name}")
+            if on_action:
+                on_action(f"Requesting: {call.name}")
+
             call_id = call.id if hasattr(call, 'id') and call.id else ""
             
-            print(f"⚡ Executing Action: {call.name}")
-            if on_action:
-                on_action(f"Executing: {call.name}")
-
-            try:
-                if call.name == "click_at":
-                    x = self._normalize_x(call.args["x"])
-                    y = self._normalize_y(call.args["y"])
-                    action_desc = f"Clicking at ({x}, {y})"
-                    pyautogui.click(x, y)
-                    
-                elif call.name == "type_text_at":
-                    x = self._normalize_x(call.args["x"])
-                    y = self._normalize_y(call.args["y"])
-                    text = call.args["text"]
-                    action_desc = f"Typing '{text}' at ({x}, {y})"
-                    
-                    pyautogui.click(x, y)
-                    await asyncio.sleep(0.1)
-                    pyautogui.write(text, interval=0.03)
-                    
-                    if call.args.get("press_enter", False):
-                        pyautogui.press("enter")
-                        
-                elif call.name == "scroll_document":
-                    direction = call.args.get("direction", "down")
-                    action_desc = f"Scrolling {direction}"
-                    clicks = 5 if direction == "up" else -5
-                    pyautogui.scroll(clicks)
-                    
-                else:
-                    print(f"⚠️ Ignoring unsupported browser action: {call.name}")
-                    result = "success_ignored" 
-                    
-            except Exception as e:
-                print(f"❗️ Error executing {call.name}: {e}")
-                result = f"error: {str(e)}"
+            # Delegate to the dispatcher
+            result = await self.dispatcher.execute(call.name, call.args)
                 
             results.append((call_id, call.name, result))
             

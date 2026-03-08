@@ -17,10 +17,6 @@ def main():
     load_dotenv(os.path.join(root_dir, '.env'))
     api_key = os.getenv("GEMINI_API_KEY")
     
-    if not api_key or api_key == "<your_key>":
-        print("❌ FATAL: GEMINI_API_KEY is not set in the .env file.")
-        sys.exit(1)
-
     # 1. Create the PyQt Application
     app = QApplication(sys.argv)
     
@@ -28,7 +24,7 @@ def main():
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     
-    # 3. Initialize SUVI App
+    # 3. Initialize SUVI App (API key is optional now, can be set in UI)
     suvi_app = SUVIApplication(api_key=api_key)
     
     # 4. Run the asyncio event loop

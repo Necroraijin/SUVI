@@ -16,11 +16,47 @@ def get_function_declarations():
                 properties={
                     "intent": types.Schema(
                         type=types.Type.STRING,
-                        description="A detailed, actionable description of what needs to be done on the screen. E.g. 'Click the Start button', 'Open Chrome and go to youtube.com', 'Read the email from John'."
+                        description="A detailed, actionable description of what needs to be done on the screen."
                     )
                 },
                 required=["intent"]
             )
+        ),
+        types.FunctionDeclaration(
+            name="coder_agent",
+            description="Invokes a specialized coding agent for writing, debugging, or explaining code. Use this when the user has complex programming questions or needs code generated.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "prompt": types.Schema(
+                        type=types.Type.STRING,
+                        description="The coding task or question."
+                    ),
+                    "language": types.Schema(
+                        type=types.Type.STRING,
+                        description="The programming language (e.g., python, javascript)."
+                    )
+                },
+                required=["prompt"]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="research_agent",
+            description="Invokes a research agent to search the web and synthesize information. Use this for facts, news, or complex information gathering that isn't on the user's screen.",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "query": types.Schema(
+                        type=types.Type.STRING,
+                        description="The search query or research topic."
+                    )
+                },
+                required=["query"]
+            )
+        ),
+        types.FunctionDeclaration(
+            name="describe_screen",
+            description="Captures the user's screen and provides a detailed verbal description of what is visible. Use this when the user asks 'what's on my screen?', 'can you see this?', or if they are visually impaired and need navigation help.",
         ),
         types.FunctionDeclaration(
             name="stop_execution",

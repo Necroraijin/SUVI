@@ -82,13 +82,37 @@ class ChatWidget(QWidget):
         # Connect the physical button to our signal
         self.stop_btn.clicked.connect(self.interrupt_requested.emit)
         
+        # --- Autopilot Toggle ---
+        self.autopilot_btn = QPushButton("✈️ Autopilot: OFF", self.container)
+        self.autopilot_btn.setCheckable(True)
+        self.autopilot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.autopilot_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(60, 60, 65, 0.8);
+                color: #AAAAAA;
+                border-radius: 12px;
+                padding: 6px 12px;
+                font-size: 9pt;
+                border: 1px solid #444;
+            }
+            QPushButton:checked {
+                background-color: rgba(0, 150, 136, 0.8);
+                color: white;
+                border: 1px solid #009688;
+            }
+        """)
+        self.autopilot_btn.clicked.connect(self._toggle_autopilot)
+        
+        controls_layout.addWidget(self.autopilot_btn)
+        controls_layout.addSpacing(10)
         controls_layout.addWidget(self.stop_btn)
         container_layout.addLayout(controls_layout)
-        
-        layout.addWidget(self.container)
-        
-        # Position at bottom center of primary screen
-        self._center_on_screen()
+
+    def _toggle_autopilot(self, checked):
+        if checked:
+            self.autopilot_btn.setText("✈️ Autopilot: ON")
+        else:
+            self.autopilot_btn.setText("✈️ Autopilot: OFF")
 
     def _center_on_screen(self):
         screen = self.screen().availableGeometry()
