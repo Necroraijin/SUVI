@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# IDEs
+.idea/
+.vscode/
+
+# Secrets & Config
+.env
+credentials.json
+application_default_credentials.json
+
+# Build & Logs
+build/
+dist/
+*.spec
+*.log
