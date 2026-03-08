@@ -46,10 +46,9 @@ You are building **SUVI (Superintelligent Unified Voice Interface)**, a producti
 - [ ] Test full loop: Voice command -> Action execution with memory context.
 
 ### Day 3 — Cloud Infrastructure + Gateway
-
-- [ ] `apps/gateway/` FastAPI Cloud Run service implementation.
+- [x] `apps/gateway/` FastAPI Cloud Run service implementation.
 - [ ] Deploy Gateway to Cloud Run.
-- [ ] `agents/orchestrator/` ADK agent implementation.
+- [x] `agents/orchestrator/` ADK agent implementation.
 - [ ] Deploy Orchestrator to Vertex AI Agent Engine.
 - [ ] Wire Local App -> Gateway -> Vertex AI.
 
