@@ -23,7 +23,8 @@ class VoiceWorker(QThread):
         self._running = True
         
         # Log available devices for debugging
-        print("🎤 Initializing Microphone...")
+        print("🎤 [VoiceWorker] Waiting for mic hand-off...")
+        self.msleep(1000) # Give 1 second for WakeWordWorker to release the mic
         
         def audio_callback(indata, frames, time, status):
             if not self._running:
@@ -36,31 +37,30 @@ class VoiceWorker(QThread):
             amplitude = float(np.abs(indata).mean())
             self.amplitude_updated.emit(min(amplitude * 10, 1.0))
 
-            # Debugging: Print a dot if we hear significant noise
-            if amplitude > 0.05:
-                print("🔊 [Mic picked up sound]")
-
             # Convert float32 to PCM 16-bit, which Gemini Live expects
             pcm_chunk = (indata[:, 0] * 32767).astype(np.int16).tobytes()
             self.audio_chunk_captured.emit(pcm_chunk)
 
-        try:
-            # We explicitly ask for the default input device to bypass Sound Mapper issues
-            device_info = sd.query_devices(kind='input')
-            print(f"🎤 Using Audio Device: {device_info['name']}")
-            
-            with sd.InputStream(
-                samplerate=self.sample_rate,
-                channels=1,
-                dtype=np.float32,
-                blocksize=self.chunk_samples,
-                callback=audio_callback
-            ):
-                # Keep thread alive while input stream runs
-                while self._running:
-                    self.msleep(100)
-        except Exception as e:
-            print(f"❌ Microphone error: {e}")
+        retry_count = 0
+        while self._running and retry_count < 3:
+            try:
+                device_info = sd.query_devices(kind='input')
+                print(f"🎤 [VoiceWorker] Opening Device: {device_info['name']}")
+                
+                with sd.InputStream(
+                    samplerate=self.sample_rate,
+                    channels=1,
+                    dtype=np.float32,
+                    blocksize=self.chunk_samples,
+                    callback=audio_callback
+                ):
+                    while self._running:
+                        self.msleep(100)
+                break # Exit loop if closed normally
+            except Exception as e:
+                retry_count += 1
+                print(f"⚠️ [VoiceWorker] Mic Access Attempt {retry_count} failed: {e}")
+                self.msleep(1000) # Wait and try again
 
     def stop(self):
         self._running = False

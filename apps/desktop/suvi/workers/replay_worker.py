@@ -53,10 +53,43 @@ class ReplayWorker(QThread):
                 optimize=True,
             )
             print(f"✅ Replay saved to: {gif_path}")
-            self.replay_saved.emit(gif_path)
             
-            # FUTURE: Upload to Google Cloud Storage here
-            
+            # Upload to Google Cloud Storage
+            try:
+                from google.cloud import storage
+                import os
+                
+                project_id = os.getenv("GCP_PROJECT_ID")
+                if project_id:
+                    bucket_name = f"{project_id}-suvi-replays"
+                    storage_client = storage.Client(project=project_id)
+                    
+                    # Ensure bucket exists
+                    bucket = storage_client.bucket(bucket_name)
+                    if not bucket.exists():
+                        bucket = storage_client.create_bucket(bucket_name, location="us-central1")
+                    
+                    blob_name = f"replays/suvi_replay_{self._session_id}.gif"
+                    blob = bucket.blob(blob_name)
+                    blob.upload_from_filename(gif_path)
+                    
+                    try:
+                        # Try to generate a signed URL (works if using a real Service Account)
+                        url = blob.generate_signed_url(expiration=3600)
+                    except Exception as sign_err:
+                        # If using ADC (Application Default Credentials), signing fails.
+                        # Fallback to standard storage URL
+                        url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+                        print(f"⚠️ Could not sign URL (likely using ADC). Returning standard link.")
+                        
+                    print(f"🚀 Replay uploaded to GCS: {url}")
+                    self.replay_saved.emit(url)
+                else:
+                    self.replay_saved.emit(gif_path)
+            except Exception as upload_err:
+                print(f"⚠️ GCS Upload failed, using local path: {upload_err}")
+                self.replay_saved.emit(gif_path)
+                
         except Exception as e:
             print(f"❌ Failed to save replay GIF: {e}")
 

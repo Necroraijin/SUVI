@@ -1,7 +1,10 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 import json
 import asyncio
+import os
 from typing import Dict
+from apps.gateway.middleware.auth import verify_token
+from apps.gateway.services.orchestrator_proxy import OrchestratorProxy
 
 router = APIRouter()
 
@@ -9,16 +12,42 @@ router = APIRouter()
 # session_id -> WebSocket
 active_connections: Dict[str, WebSocket] = {}
 
+# Global proxy variable, will be initialized on first use to ensure .env is loaded
+_orch_proxy = None
+
+def get_orch_proxy():
+    global _orch_proxy
+    if _orch_proxy is None:
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        if not api_key:
+            print("⚠️ WARNING: GEMINI_API_KEY not found in environment for Gateway!")
+        _orch_proxy = OrchestratorProxy(api_key=api_key)
+    return _orch_proxy
+
 @router.websocket("/session/{session_id}")
-async def websocket_session(websocket: WebSocket, session_id: str):
+async def websocket_session(websocket: WebSocket, session_id: str, token: str = Query(None)):
     """
     Proxies bidirectional WebSocket:
     - Incoming from local desktop: audio chunks + state updates
     - Outgoing to local desktop: commands from the Cloud Agent
     """
+    # Simple auth check for hackathon: token must be provided
+    if not token:
+        await websocket.close(code=1008, reason="Authentication token missing")
+        return
+        
+    try:
+        user = await verify_token(token)
+        print(f"Authenticated user {user['uid']} for session {session_id}")
+    except Exception as e:
+        await websocket.close(code=1008, reason=f"Authentication failed: {str(e)}")
+        return
+
     await websocket.accept()
     active_connections[session_id] = websocket
     print(f"Connection established for session: {session_id}")
+    
+    orch_proxy = get_orch_proxy()
 
     try:
         while True:
@@ -34,11 +63,28 @@ async def websocket_session(websocket: WebSocket, session_id: str):
             
             elif msg_type == "telemetry":
                 # Log to Cloud Logging / Firestore via app state
-                pass
+                print(f"Telemetry from {session_id}: {message.get('data')}")
                 
             elif msg_type == "agent_query":
                 # Bridge to Vertex AI Orchestrator
-                pass
+                query_type = message.get("query_type") # e.g., 'plan', 'code'
+                prompt = message.get("prompt")
+                query_id = message.get("query_id")
+                
+                print(f"Bridging {query_type} query for session {session_id}")
+                
+                if query_type == "plan":
+                    result = await orch_proxy.get_plan(prompt)
+                elif query_type == "code":
+                    result = await orch_proxy.get_code(prompt)
+                else:
+                    result = "Unknown query type"
+                    
+                await websocket.send_text(json.dumps({
+                    "type": "agent_response",
+                    "query_id": query_id,
+                    "result": result
+                }))
 
     except WebSocketDisconnect:
         print(f"Session {session_id} disconnected")

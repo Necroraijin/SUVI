@@ -14,25 +14,23 @@ You are the "hands" for users who cannot use theirs. You help disabled, blind, o
 
 YOUR PERSONALITY:
 - Warm, professional, and companion-like. You are a friend, not a machine.
-- Proactive: Don't just wait for orders. If you see a notification, ask if the user wants it read. If it's morning, offer to open their usual apps.
+- Proactive: Don't just wait for orders. If you see a notification, ask if the user wants it read.
 - Descriptive: For blind users, be vivid in your descriptions of the screen.
-- Empathetic: Acknowledge the user's feelings. If they seem frustrated, offer a kind word.
+- Empathetic: Acknowledge the user's feelings.
 
-YOUR CAPABILITIES:
-- Total Desktop Control: Use `execute_computer_task` for any UI action.
+YOUR CAPABILITIES (CRITICAL):
+- YOU CANNOT CLICK OR TYPE DIRECTLY. You MUST use the `execute_computer_task` tool to perform ANY action on the screen (e.g., opening apps, buying items, searching the web, sending emails).
+- If the user asks you to "buy an iphone", "open notepad", "play music", or do ANY physical task, you MUST immediately call the `execute_computer_task` tool with a detailed intent. Do NOT just say you will do it—CALL THE TOOL.
 - Vision: Use `describe_screen` to explain what is happening visually.
-- Memory: Remember everything the user tells you about their preferences, family, or work.
 - Research & Code: Use your specialized agents for information or technical help.
 
 SAFETY & TRUST:
-- You are a vital accessibility medium. Reliability is everything.
 - Always confirm before high-risk actions.
-- Protect the user's privacy and data like a loyal companion.
 
 When you receive a task:
-1. Respond with warmth and understanding.
-2. Break down your plan aloud so the user feels in control.
-3. Execute and report back with a friendly confirmation."""
+1. Respond with warmth.
+2. Break down your plan aloud.
+3. IMMEDIATELY call the appropriate tool (like `execute_computer_task`)."""
 
 class GeminiLiveService(QObject):
     """
@@ -63,7 +61,10 @@ class GeminiLiveService(QObject):
         user_profile = user_profile or {}
         
         profile_name = user_profile.get('name', 'User')
-        profile_context = f"\nUser: {profile_name}. Preferences: {user_profile.get('preferences', {})}"
+        recent_history = user_profile.get('recent_history', [])
+        history_str = "\n".join(recent_history) if recent_history else "No recent tasks."
+        
+        profile_context = f"\n\n--- CURRENT USER CONTEXT ---\nUser Name: {profile_name}\nPreferences: {user_profile.get('preferences', {})}\nRecent Tasks (Memory):\n{history_str}\n---------------------------"
         
         # Build the tools list
         tools = [types.Tool(function_declarations=get_function_declarations())]
@@ -93,39 +94,49 @@ class GeminiLiveService(QObject):
         
         while self._running:
             try:
-                async with self.client.aio.live.connect(model="gemini-2.5-flash-native-audio-preview-12-2025", config=config) as session:
-                    print("🟢 Gemini Live WebSocket Connected.")
+                print(f"📡 [Live] Connecting to Gemini with model: gemini-2.5-flash-native-audio-latest")
+                async with self.client.aio.live.connect(model="gemini-2.5-flash-native-audio-latest", config=config) as session:
+                    print("🟢 [Live] WebSocket Connected.")
                     self.state_changed.emit("idle")
                     reconnect_attempts = 0 # Reset on successful connection
                     
-                    # Run send and receive loops concurrently
+                    # Concurrently handle send and receive
                     receive_task = asyncio.create_task(self._receive_responses(session))
                     send_task = asyncio.create_task(self._send_loop(session))
                     
-                    # Wait for either to fail or complete
                     done, pending = await asyncio.wait(
                         [receive_task, send_task], 
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
-                    # Clean up the other task if one exits
                     for task in pending:
                         task.cancel()
                         
             except asyncio.CancelledError:
-                print("Session task cancelled.")
                 break
             except Exception as e:
-                print(f"⚠️ Gemini Live connection dropped: {e}")
+                error_str = str(e)
+                print(f"⚠️ [Live] Connection Error: {error_str}")
+                
+                # High-fidelity error diagnosis for the user
+                friendly_error = "Connection dropped."
+                if "403" in error_str or "PERMISSION_DENIED" in error_str:
+                    friendly_error = "API Key / Project mismatch. Please check your .env settings."
+                elif "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    friendly_error = "Rate limit reached. Please wait a moment."
+                elif "invalid_argument" in error_str.lower():
+                    friendly_error = "Model configuration error. Check your API Key permissions."
+
                 self.state_changed.emit("error")
+                self.transcript_ready.emit(f"System Error: {friendly_error}", True)
                 
                 reconnect_attempts += 1
                 if reconnect_attempts >= max_reconnects:
-                    print("❌ Max reconnection attempts reached. Stopping Live Session.")
+                    print("❌ [Live] Max reconnection attempts reached.")
                     break
                     
-                print(f"🔄 Reconnecting in 2 seconds... (Attempt {reconnect_attempts}/{max_reconnects})")
-                await asyncio.sleep(2)
+                print(f"🔄 [Live] Retrying in 3 seconds... ({reconnect_attempts}/{max_reconnects})")
+                await asyncio.sleep(3)
                 
         self._running = False
         print("🔴 Gemini Live WebSocket Closed.")
@@ -168,6 +179,12 @@ class GeminiLiveService(QObject):
             pass
         except Exception as e:
             print(f"Send loop error: {e}")
+
+    async def speak_text(self, text: str):
+        """Allows SUVI to speak custom text through the Live Session."""
+        if self._running:
+            # We wrap the text as a user prompt that triggers a verbal response
+            await self._outbound_queue.put(("text", f"Please say exactly this to the user: {text}"))
 
     async def send_audio_chunk(self, pcm_data: bytes):
         if self._running:

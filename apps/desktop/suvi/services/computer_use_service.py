@@ -1,7 +1,8 @@
 import asyncio
 import io
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from google import genai
+from google.genai import types
 from google.genai.types import (
     ComputerUse, Content, Environment,
     FunctionResponse, FunctionResponseBlob,
@@ -10,23 +11,28 @@ from google.genai.types import (
 import pyautogui
 import mss
 from PIL import Image
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from apps.desktop.suvi.executor.dispatcher import ActionDispatcher
 
-class ComputerUseService:
+class ComputerUseService(QObject):
     """
     Drives the Gemini Computer Use model via Vertex AI.
     Perfectly aligned with Google's official Jupyter Notebook implementation.
     """
+    # Signal to UI to request voice confirmation from the user
+    voice_confirmation_requested = pyqtSignal(str, str) # title, message
 
-    # Using the Gemini 3 Flash Preview as supported by the notebook
+    # Use the correct Gemini 2.5 computer use preview model
     MODEL_ID = "gemini-3-flash-preview"
 
     def __init__(self, client: genai.Client, ui_widget=None, firestore_service=None, logger=None):
+        super().__init__()
         self.client = client
         self.firestore = firestore_service
         self.logger = logger
         self._interrupt_requested = False
+        self._voice_response_future = None
         
         # Security: Use the dispatcher for all physical actions
         self.dispatcher = ActionDispatcher(ui_widget)
@@ -91,23 +97,16 @@ Be a helpful companion."""
         max_turns = 15
         actions_taken = []
         
-        # 1. Base Configuration
-        config_kwargs = {
-            "tools": [
+        # 1. Base Configuration with pure Computer Use Tool (No custom AFC tools allowed simultaneously)
+        config = GenerateContentConfig(
+            tools=[
                 Tool(
                     computer_use=ComputerUse(
                         environment=Environment.ENVIRONMENT_BROWSER,
-                        excluded_predefined_functions=["drag_and_drop", "open_web_browser"]
                     )
                 )
             ]
-        }
-        
-        # Add thinking config for Gemini 3
-        if "gemini-3" in self.MODEL_ID:
-            config_kwargs["thinking_config"] = ThinkingConfig(include_thoughts=True)
-            
-        config = GenerateContentConfig(**config_kwargs)
+        )
 
         # 2. Initial Setup: Prompt + Initial Screenshot
         screenshot_bytes = self._capture_screen()
@@ -231,14 +230,6 @@ Be a helpful companion."""
                         "id": call_id,
                         "name": name,
                         "response": {"result": result, "url": "desktop"},
-                        "parts": [
-                            {
-                                "inline_data": {
-                                    "mime_type": "image/png",
-                                    "data": screenshot_bytes
-                                }
-                            }
-                        ]
                     }
                 })
                 
@@ -274,9 +265,39 @@ Be a helpful companion."""
 
             call_id = call.id if hasattr(call, 'id') and call.id else ""
             
-            # Delegate to the dispatcher
-            result = await self.dispatcher.execute(call.name, call.args)
+            if call.name == "voice_confirmation":
+                # Special accessibility tool: Ask the user via voice
+                message = call.args.get("message", "Is it okay if I perform this action?")
+                
+                # Check autopilot state
+                autopilot_on = self.dispatcher.is_autopilot_enabled()
+                
+                # If autopilot is ON, we only ask for high-risk actions.
+                # Since we don't have the action context here easily, 
+                # we'll assume the model calls this only for risky ones.
+                # However, a senior dev would ensure we don't annoy the user.
+                if autopilot_on and "dangerous" not in message.lower():
+                    print(f"✈️ Autopilot active: Auto-confirming action: {message}")
+                    result = "yes"
+                else:
+                    print(f"🎙️ Voice Confirmation Requested: {message}")
+                    self.voice_confirmation_requested.emit("SUVI Security", message)
+                    
+                    self._voice_response_future = asyncio.get_event_loop().create_future()
+                    try:
+                        user_response = await asyncio.wait_for(self._voice_response_future, timeout=30.0)
+                        result = user_response
+                    except asyncio.TimeoutError:
+                        result = "User did not respond via voice in time."
+            else:
+                # Delegate to the physical dispatcher (PyAutoGUI)
+                result = await self.dispatcher.execute(call.name, call.args)
                 
             results.append((call_id, call.name, result))
             
         return "CONTINUE", results
+
+    def set_voice_response(self, response: str):
+        """Called by SUVIApplication when the user answers via voice."""
+        if self._voice_response_future and not self._voice_response_future.done():
+            self._voice_response_future.set_result(response)

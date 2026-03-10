@@ -2,70 +2,54 @@
 
 ## 🎯 Project Context & Vision: Gemini Live Agent Challenge 2025
 
-**The Vision:** SUVI (Superintelligent Unified Voice Interface) is named in tribute to a loved one, carrying a legacy of support and guidance. For the Hackathon, this deeply personal mission translates into a powerful accessibility tool. **SUVI is designed to be the "hands" for those who cannot use them.** For users with motor disabilities, visual impairments, or severe accessibility needs, SUVI bridges the gap between natural human voice and complex desktop control. It is not just an assistant; it is a vital accessibility medium.
+**SUVI (Superintelligent Unified Voice Interface)** is more than a technical solution; it is a deeply personal mission. Named in tribute to a loved one, SUVI carries forward a legacy of support, guidance, and care into the digital age.
 
-You are building **SUVI**, a production-grade AI agent that controls a user's desktop purely using natural voice and computer vision.
+### 🕊️ The Story & The Why
+This project was born from the desire to bridge the gap between human intent and machine execution for those who face the greatest barriers. We believe that technology should be an equalizer, not another obstacle. SUVI is dedicated to the memory of a loved one whose spirit of helping others lives on through this interface.
 
-- **Goal:** Win the Gemini Live Agent Challenge (Categories: UI Navigator + Live Agents) by demonstrating profound accessibility impact.
-- **Core Differentiator:** Use `gemini-2.5-computer-use` to interpret the screen and execute actions without DOM/API access, enabling total, hands-free computer control for disabled users.
+### 🦾 The Goal: "Hands for the Handless"
+Our primary objective for the **Gemini Live Agent Challenge** is to demonstrate a profound accessibility impact. SUVI is designed to be the "hands" for those who cannot use them—individuals with motor disabilities, visual impairments, or severe accessibility needs. By using `gemini-2.5-computer-use` and `gemini-2.0-flash-live`, we are building a world where a desktop can be controlled entirely through natural voice and vision, without needing to touch a mouse or keyboard.
 
 ## ⚠️ Critical Engineering Directives (NEVER IGNORE)
 
-1. **NO STUBS:** Always write complete, runnable, production-ready code. Never leave placeholders like `pass` or `TODO` unless explicitly asked.
+1. **NO STUBS:** Always write complete, runnable, production-ready code.
 2. **MODEL IDS:** Strictly use these exact Google model IDs:
    - Vision/Action: `gemini-2.5-computer-use-preview-10-2025`
    - Voice I/O: `gemini-2.0-flash-live-001`
    - Orchestrator: `gemini-2.5-pro-preview-06-05`
-3. **UI CONCURRENCY:** The desktop app uses `PyQt6` and `qasync`. **Never** block the Qt event loop. **Always** use `pyqtSignal` to communicate from background threads/asyncio to the UI.
-4. **NO IPC:** Keep the desktop client as a single Python process. No Node.js, no Electron.
-5. **AUDIT TRAIL:** Every desktop action must log to Cloud Logging for hackathon proof.
-6. **INTERRUPTIBILITY:** The system must be able to stop mid-task when the user says "stop".
+3. **UI CONCURRENCY:** Use `PyQt6` + `qasync`. Never block the event loop.
+4. **ACCESSIBILITY FIRST:** Every 'Dangerous' action MUST have a voice confirmation loop.
 
-## 🏗️ Architecture Layers
+## 🏗️ Architecture Layers (A2A Protocol)
 
-1. **Local (PyQt6):** Chat widget UI, Mic capture (`sounddevice`), Screen capture (`python-mss`), Action execution (`pyautogui`, `playwright`).
-2. **Gateway (Cloud Run):** FastAPI WebSocket proxy, Firebase Auth, Rate limiting.
-3. **Agent (Vertex AI):** Google ADK agent ("SUVI Orchestrator") managing tools.
-4. **Data (GCP):** Firestore (memory), Pub/Sub & BigQuery (telemetry), Cloud Logging.
+1. **Orchestrator Agent (Gemini 2.5 Pro):** The brain. Plans tasks and delegates to sub-agents.
+2. **Computer Use Agent (Gemini 2.5 Computer Use):** The eyes and hands. Executes vision-based loops.
+3. **Live Gateway (Cloud Run):** Handles real-time voice and token verification.
+4. **Local Executor (Python):** PyAutoGUI dispatcher and MSS screen capture.
 
 ## 📋 5-Day Build Plan & Task Tracker
 
 ### Day 1 — Foundation (Computer Use Loop)
-
-- [x] Set up GCP project (`setup_gcp.sh`).
-- [x] `apps/desktop/suvi/__main__.py` & `app.py` (PyQt6 + qasync skeleton).
-- [x] `apps/desktop/suvi/services/computer_use_service.py` (Gemini 2.5 API calls).
-- [ ] `apps/desktop/suvi/executor/` (PyAutoGUI dispatcher).
-- [ ] `apps/desktop/suvi/workers/screen_worker.py` (mss capture).
-- [x] Test loop: Hardcoded intent -> Screenshot -> Gemini -> PyAutoGUI action.
+- [x] Set up GCP project with real Service Accounts and Buckets.
+- [x] Implement production `ActionDispatcher` with risk assessment.
+- [x] Implement `ComputerUseService` with Gemini 2.5.
 
 ### Day 2 — Voice + Memory
-
-- [x] `apps/desktop/suvi/services/live_session.py` (Gemini Live WebSocket).
-- [x] `apps/desktop/suvi/workers/voice_worker.py` (sounddevice mic capture).
-- [ ] Firebase Auth integration.
-- [x] `apps/desktop/suvi/services/memory_service.py` (Firestore).
-- [x] Test full loop: Voice command -> Action execution with memory context.
+- [x] Integrate real **Firebase Auth** for secure login.
+- [x] Implement **Voice-First Confirmation** for accessibility safety.
+- [x] Implement persistent memory via Firestore.
 
 ### Day 3 — Cloud Infrastructure + Gateway
-- [x] `apps/gateway/` FastAPI Cloud Run service implementation.
-- [ ] Deploy Gateway to Cloud Run.
-- [x] `agents/orchestrator/` ADK agent implementation.
-- [ ] Deploy Orchestrator to Vertex AI Agent Engine.
-- [ ] Wire Local App -> Gateway -> Vertex AI.
+- [x] Deploy FastAPI Gateway with Token Verification.
+- [x] Implement **A2A (Agent-to-Agent)** handoff logic.
+- [x] Deploy Orchestrator to Vertex AI Agent Engine.
 
 ### Day 4 — UI Polish + Features
-
-- [ ] `apps/desktop/suvi/ui/login/` (Login window).
-- [x] `apps/desktop/suvi/ui/widget/` (Floating chat widget, animations).
-- [x] Implement Smart Interrupt feature.
-- [ ] Implement SUVI Replay feature (GIF recording).
-- [ ] Implement Autopilot Mode.
+- [x] Finalize `LoginWindow` and `ChatWidget` (with Autopilot support).
+- [x] Implement SUVI Replay (Cloud GIF upload).
+- [x] Adaptive Vision: Zoom & Re-scan capability.
 
 ### Day 5 — Demo + Submission Prep
-
 - [ ] Record 4-minute demo video.
-- [ ] Create Architecture diagram (`docs/architecture.png`).
-- [ ] Finalize README with spin-up instructions.
-- [ ] Verify GCP proof logs.
+- [ ] Finalize Architecture diagram.
 - [ ] Devpost submission.

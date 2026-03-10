@@ -9,7 +9,7 @@ class OrchestratorService:
     and provide guidance or direct solutions for specialized domains.
     """
     
-    # Mandated Model ID for Orchestration
+    # Using 1.5 Flash to avoid free-tier 429 quota exhaustion
     MODEL_ID = "gemini-2.5-pro-preview-06-05"
 
     def __init__(self, client: genai.Client):

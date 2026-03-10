@@ -5,47 +5,86 @@ from typing import Any, Dict, Optional
 
 class MemoryService:
     """
-    Manages long-term memory and user persona data via Google Cloud Firestore.
-    Ensures SUVI remembers preferences, personal facts, and past actions.
+    Manages long-term memory and user persona data.
+    Gracefully falls back to local memory if GCP/Firestore is unavailable.
     """
-    def __init__(self, project_id: Optional[str] = None):
-        self.project_id = project_id or os.getenv("GCP_PROJECT_ID")
-        if self.project_id:
-            self.db = firestore.AsyncClient(project=self.project_id)
-        else:
-            print("⚠️ GCP_PROJECT_ID not set. MemoryService running in mock mode.")
-            self.db = None
-
-    async def save_user_fact(self, user_id: str, fact_key: str, value: Any):
-        """Stores a personal fact or preference (e.g., 'likes_dark_mode': True)."""
-        if not self.db: return
-        doc_ref = self.db.collection("users").document(user_id).collection("persona").document(fact_key)
-        await doc_ref.set({
-            "value": value,
-            "timestamp": datetime.utcnow()
-        })
-        print(f"💾 Personal fact saved: {fact_key} = {value}")
+    def __init__(self):
+        self.project_id = os.getenv("GCP_PROJECT_ID", "suvi-hackathon-2025")
+        self.db = None
+        self.local_persona_cache = {}
+        
+        try:
+            # Only attempt to initialize if we aren't in a mock environment
+            if os.getenv("MOCK_AUTH") != "true":
+                self.db = firestore.AsyncClient(project=self.project_id)
+                print(f"📡 Firestore initialized for project: {self.project_id}")
+        except Exception as e:
+            print(f"⚠️ Firestore Init Warning: {e}. Using local memory fallback.")
 
     async def get_user_persona(self, user_id: str) -> Dict[str, Any]:
-        """Retrieves the full persona context for a user."""
-        if not self.db: return {}
-        persona = {}
-        docs = self.db.collection("users").document(user_id).collection("persona").stream()
-        async for doc in docs:
-            persona[doc.id] = doc.to_dict().get("value")
-        return persona
+        """Fetches user preferences and persona."""
+        if not self.db or user_id == "dev_user_001":
+            return self.local_persona_cache.get(user_id, {})
+
+        try:
+            doc_ref = self.db.collection("users").document(user_id)
+            doc = await doc_ref.get()
+            if doc.exists:
+                return doc.to_dict()
+        except Exception as e:
+            print(f"⚠️ Memory fetch failed: {e}. Falling back to local.")
+        
+        return self.local_persona_cache.get(user_id, {})
+
+    async def save_user_persona(self, user_id: str, data: Dict[str, Any]):
+        """Saves user preferences."""
+        self.local_persona_cache[user_id] = data
+        if not self.db:
+            return
+
+        try:
+            doc_ref = self.db.collection("users").document(user_id)
+            await doc_ref.set(data, merge=True)
+        except Exception as e:
+            print(f"⚠️ Memory save failed: {e}")
+
+    async def get_recent_memory(self, user_id: str, limit: int = 5) -> list:
+        """Fetches the recent tasks performed by the user to provide context."""
+        recent_tasks = []
+        if not self.db:
+            return recent_tasks
+            
+        try:
+            query = self.db.collection("suvi_memory") \
+                           .where("user_id", "==", user_id) \
+                           .order_by("timestamp", direction=firestore.Query.DESCENDING) \
+                           .limit(limit)
+            
+            docs = await query.get()
+            for doc in docs:
+                data = doc.to_dict()
+                recent_tasks.append(f"Intent: {data.get('intent')} (Status: {data.get('status')})")
+        except Exception as e:
+            print(f"⚠️ Failed to fetch recent memory: {e}")
+            
+        return recent_tasks
 
     async def log_task_execution(self, user_id: str, session_id: str, intent: str, actions: list, status: str):
-        """Logs a completed desktop task for future audit and recall."""
-        if not self.db: return
-        doc_ref = self.db.collection("suvi_memory").document()
-        await doc_ref.set({
-            "user_id": user_id,
-            "session_id": session_id,
-            "timestamp": datetime.utcnow(),
-            "intent": intent,
-            "actions_taken": actions,
-            "status": status,
-            "type": "computer_use_task"
-        })
-        print(f"💾 Task memory logged to Firestore.")
+        """Logs a completed task for future recall."""
+        print(f"📝 Logging task to memory: {intent} ({status})")
+        if not self.db:
+            return
+
+        try:
+            doc_ref = self.db.collection("suvi_memory").document()
+            await doc_ref.set({
+                "user_id": user_id,
+                "session_id": session_id,
+                "timestamp": datetime.utcnow(),
+                "intent": intent,
+                "actions_taken": actions,
+                "status": status,
+                "type": "computer_use_task"
+            })
+        except Exception as e:
+            print(f"⚠️ Task logging failed: {e}")
