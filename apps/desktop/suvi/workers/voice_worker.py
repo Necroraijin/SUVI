@@ -24,7 +24,7 @@ class VoiceWorker(QThread):
         
         # Log available devices for debugging
         print("🎤 [VoiceWorker] Waiting for mic hand-off...")
-        self.msleep(1000) # Give 1 second for WakeWordWorker to release the mic
+        self.msleep(300) # Brief wait for WakeWordWorker to release the mic
         
         def audio_callback(indata, frames, time, status):
             if not self._running:

@@ -1,5 +1,6 @@
 import os
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -56,7 +57,7 @@ class MemoryService:
             
         try:
             query = self.db.collection("suvi_memory") \
-                           .where("user_id", "==", user_id) \
+                           .where(filter=FieldFilter("user_id", "==", user_id)) \
                            .order_by("timestamp", direction=firestore.Query.DESCENDING) \
                            .limit(limit)
             

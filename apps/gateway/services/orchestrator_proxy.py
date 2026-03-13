@@ -12,13 +12,20 @@ class OrchestratorProxy:
             api_key=api_key,
             http_options={'api_version': 'v1alpha'}
         )
-        # Using 1.5 Flash here for planning because it has a massive 15 RPM free tier limit
-        # This prevents the 429 RESOURCE_EXHAUSTED errors that happen with 2.5 on free tier.
-        self.model_id = "gemini-1.5-flash"
+        self.model_id = "gemini-3.1-pro-preview"
 
     async def get_plan(self, intent: str) -> str:
         """Asks the orchestrator to break down a complex task."""
-        prompt = f"Break down this desktop task into steps: {intent}"
+        prompt = f"""You are the SUVI Orchestrator. 
+Your job is to take a vague user intent and break it down into an EXACT, linear step-by-step plan for a Computer Use AI Automation Agent operating a Windows desktop.
+
+USER INTENT: {intent}
+
+RULES:
+1. Provide ONLY the step-by-step plan. No introductory or concluding text (e.g. do not say "Here is a breakdown").
+2. DO NOT provide options or alternative scenarios (e.g. NO "Scenario A" vs "Scenario B"). Choose the most direct path and stick to it.
+3. Address the plan directly to the execution agent.
+4. Keep the steps sequential and specific (e.g., "1. Launch Chrome.", "2. Click the address bar and navigate to YouTube")."""
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.model_id,

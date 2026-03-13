@@ -1,15 +1,17 @@
 import sys
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QGraphicsDropShadowEffect, QFrame
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QGraphicsDropShadowEffect, QFrame, QLineEdit
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QSize
 from PyQt6.QtGui import QColor, QFont
 
 class ChatWidget(QWidget):
     """
     The main floating, always-on-top UI for SUVI.
-    Provides visual feedback on state, shows transcripts, and offers a Smart Interrupt button.
+    Provides visual feedback on state, shows transcripts, and offers text chat and session controls.
     """
-    # Signal emitted when user clicks the Stop button
+    # Signals emitted by UI interactions
     interrupt_requested = pyqtSignal()
+    session_toggle_requested = pyqtSignal(bool) # True = Start, False = Stop
+    text_submitted = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -18,7 +20,8 @@ class ChatWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         self._drag_pos = QPoint()
-        self.setMinimumSize(400, 160)
+        self.setMinimumSize(450, 220)
+        self.is_session_active = False
         self.init_ui()
         
     def init_ui(self):
@@ -47,20 +50,73 @@ class ChatWidget(QWidget):
         container_layout = QVBoxLayout(self.container)
         container_layout.setContentsMargins(25, 20, 25, 20)
         
-        # --- Top Row: Status ---
-        self.status_label = QLabel("🟢 SUVI ACTIVE", self.container)
+        # --- Top Row: Status & Toggle ---
+        header_layout = QHBoxLayout()
+        self.status_label = QLabel("⚪ SUVI IDLE", self.container)
         self.status_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.status_label.setStyleSheet("color: #BB86FC; background: transparent;")
-        container_layout.addWidget(self.status_label)
+        self.status_label.setStyleSheet("color: #FFFFFF; background: transparent;")
+        header_layout.addWidget(self.status_label)
+        
+        header_layout.addStretch()
+        
+        self.toggle_btn = QPushButton("▶ Start", self.container)
+        self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_btn.setFixedSize(80, 30)
+        self.toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #03DAC6;
+                color: #000000;
+                border-radius: 10px;
+                font-weight: bold;
+                border: none;
+            }
+            QPushButton:hover { background-color: #018786; }
+        """)
+        self.toggle_btn.clicked.connect(self._on_toggle_clicked)
+        header_layout.addWidget(self.toggle_btn)
+        container_layout.addLayout(header_layout)
         
         # --- Middle Row: Transcript ---
-        self.transcript_label = QLabel("Ready for your voice command...", self.container)
+        self.transcript_label = QLabel("Say 'Hey SUVI' or click Start...", self.container)
         self.transcript_label.setFont(QFont("Segoe UI", 10))
         self.transcript_label.setWordWrap(True)
         self.transcript_label.setMinimumHeight(45)
-        self.transcript_label.setStyleSheet("color: #FFFFFF; background: transparent;")
+        self.transcript_label.setStyleSheet("color: #BBBBBB; background: transparent;")
         self.transcript_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         container_layout.addWidget(self.transcript_label)
+        
+        # --- Text Input Row (For voiceless users) ---
+        input_layout = QHBoxLayout()
+        self.text_input = QLineEdit(self.container)
+        self.text_input.setPlaceholderText("Type a command here...")
+        self.text_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(60, 60, 65, 0.8);
+                color: white;
+                border-radius: 8px;
+                padding: 6px 10px;
+                border: 1px solid #444;
+            }
+            QLineEdit:focus { border: 1px solid #BB86FC; }
+        """)
+        self.text_input.returnPressed.connect(self._submit_text)
+        input_layout.addWidget(self.text_input)
+        
+        self.send_btn = QPushButton("Send", self.container)
+        self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_btn.setFixedSize(60, 30)
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #BB86FC;
+                color: #000000;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #9965f4; }
+        """)
+        self.send_btn.clicked.connect(self._submit_text)
+        input_layout.addWidget(self.send_btn)
+        container_layout.addLayout(input_layout)
         
         # --- Bottom Row: Controls ---
         controls_layout = QHBoxLayout()
@@ -70,7 +126,8 @@ class ChatWidget(QWidget):
         self.autopilot_btn = QPushButton("✈️ Autopilot: OFF", self.container)
         self.autopilot_btn.setCheckable(True)
         self.autopilot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.autopilot_btn.setFixedSize(140, 32)
+        self.autopilot_btn.setFixedSize(140, 30)
+        self.autopilot_btn.setToolTip("When ON, SUVI will skip voice confirmation for safe/moderate tasks.")
         self.autopilot_btn.setStyleSheet("""
             QPushButton {
                 background-color: rgba(60, 60, 65, 0.8);
@@ -91,26 +148,31 @@ class ChatWidget(QWidget):
         controls_layout.addWidget(self.autopilot_btn)
         controls_layout.addStretch() 
         
-        self.stop_btn = QPushButton("🛑 Stop", self.container)
-        self.stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.stop_btn.setFixedSize(90, 32)
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #CF6679;
-                color: #000000;
-                border-radius: 10px;
-                font-weight: bold;
-                border: none;
-            }
-            QPushButton:hover { background-color: #ff798d; }
-        """)
-        self.stop_btn.clicked.connect(self.interrupt_requested.emit)
-        controls_layout.addWidget(self.stop_btn)
-        
         container_layout.addLayout(controls_layout)
         layout.addWidget(self.container)
         
         self._center_on_screen()
+
+    def _on_toggle_clicked(self):
+        self.is_session_active = not self.is_session_active
+        if self.is_session_active:
+            self.toggle_btn.setText("🛑 Stop")
+            self.toggle_btn.setStyleSheet("background-color: #CF6679; color: #000; border-radius: 10px; font-weight: bold;")
+            self.session_toggle_requested.emit(True)
+        else:
+            self.toggle_btn.setText("▶ Start")
+            self.toggle_btn.setStyleSheet("background-color: #03DAC6; color: #000; border-radius: 10px; font-weight: bold;")
+            self.session_toggle_requested.emit(False)
+            self.interrupt_requested.emit()
+
+    def _submit_text(self):
+        text = self.text_input.text().strip()
+        if text:
+            # If session is not active, start it first
+            if not self.is_session_active:
+                self._on_toggle_clicked()
+            self.text_submitted.emit(text)
+            self.text_input.clear()
 
     def _toggle_autopilot(self, checked):
         if checked:
@@ -126,6 +188,12 @@ class ChatWidget(QWidget):
 
     def update_state(self, state: str):
         """Update the visual indicator based on SUVI's current phase."""
+        if state in ["idle", "error"] and self.is_session_active and state != "idle":
+            # If backend forces stop
+            self.is_session_active = False
+            self.toggle_btn.setText("▶ Start")
+            self.toggle_btn.setStyleSheet("background-color: #03DAC6; color: #000; border-radius: 10px; font-weight: bold;")
+
         states = {
             "idle": ("🟢 SUVI READY", "#03DAC6"),
             "listening": ("🎙️ LISTENING...", "#BB86FC"), 

@@ -16,7 +16,7 @@ from .system_prompt import ORCHESTRATOR_SYSTEM_PROMPT
 
 def get_orchestrator_config():
     return {
-        "model": "gemini-2.5-pro-preview-06-05",
+        "model": "gemini-3.1-pro-preview",
         "system_instruction": ORCHESTRATOR_SYSTEM_PROMPT,
         "tools": [
             computer_use_tool,

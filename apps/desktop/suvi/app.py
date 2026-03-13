@@ -17,6 +17,7 @@ from apps.desktop.suvi.services.computer_use_service import ComputerUseService
 from apps.desktop.suvi.services.orchestrator_service import OrchestratorService
 from apps.desktop.suvi.services.memory_service import MemoryService
 from apps.desktop.suvi.services.gateway_service import GatewayService
+from apps.desktop.suvi.services.environment_scanner import EnvironmentScanner
 
 class SUVIApplication:
     """
@@ -32,6 +33,7 @@ class SUVIApplication:
         self.orchestrator = None
         self.gateway = GatewayService()
         self.memory = MemoryService()
+        self.env_scanner = EnvironmentScanner()
         self.user_persona = {}
         self.user_id = None
         self._expecting_voice_confirmation = False
@@ -50,14 +52,23 @@ class SUVIApplication:
 
     def init_services(self, api_key: str, ui_widget):
         self.api_key = api_key
-        print(f"✅ Initializing AI Services with API Key: {api_key[:10]}...")
+        project_id = os.getenv("GCP_PROJECT_ID")
+        print(f"✅ Initializing AI Services (Project: {project_id})")
+        
         try:
-            client = genai.Client(api_key=self.api_key, http_options={'api_version': 'v1alpha'})
+            # Scan the user's system environment (installed apps, capabilities)
+            env_data = self.env_scanner.scan()
+            print(f"🌍 Environment: {env_data.get('os')}, {len(env_data.get('installed_apps', []))} apps, "
+                  f"browser: {env_data.get('default_browser')}")
+            
+            client = genai.Client(api_key=self.api_key)
+            
             self.live_service = GeminiLiveService(client)
-            self.computer_service = ComputerUseService(client, ui_widget=ui_widget)
+            self.computer_service = ComputerUseService(client, ui_widget=ui_widget, env_scanner=self.env_scanner)
             self.orchestrator = OrchestratorService(client)
         except Exception as e:
             print(f"❌ Critical Error initializing AI services: {e}")
+            self.ui.update_transcript(f"System Error: Failed to initialize AI services. {e}")
 
     def _setup_connections(self):
         # Wake Word
@@ -71,10 +82,11 @@ class SUVIApplication:
         self.voice_worker.amplitude_updated.connect(self._on_amplitude)
         
         # Live Session signals -> UI and Engine
-        self.live_service.transcript_ready.connect(self._on_transcript)
-        self.live_service.response_audio.connect(self._on_tts_audio)
-        self.live_service.state_changed.connect(self._on_state)
-        self.live_service.tool_call_requested.connect(self._on_tool_call)
+        if self.live_service:
+            self.live_service.transcript_ready.connect(self._on_transcript)
+            self.live_service.response_audio.connect(self._on_tts_audio)
+            self.live_service.state_changed.connect(self._on_state)
+            self.live_service.tool_call_requested.connect(self._on_tool_call)
         
         # Computer Use signals
         if self.computer_service:
@@ -82,6 +94,19 @@ class SUVIApplication:
         
         # UI signals -> Engine
         self.ui.interrupt_requested.connect(self._on_user_interrupt)
+        self.ui.session_toggle_requested.connect(self._on_session_toggle)
+        self.ui.text_submitted.connect(self._on_text_submitted)
+
+    def _on_session_toggle(self, start: bool):
+        if start:
+            self.start_session()
+        else:
+            self._on_user_interrupt()
+
+    def _on_text_submitted(self, text: str):
+        self.ui.update_transcript(f"You: {text}")
+        if self.live_service:
+            asyncio.create_task(self.live_service.send_text(text))
 
     def _on_voice_confirmation_requested(self, title: str, message: str):
         self.ui.update_state("speaking")
@@ -139,6 +164,88 @@ class SUVIApplication:
                 self.computer_service.set_voice_response(text)
                 self._expecting_voice_confirmation = False
 
+            # Guard: don't re-trigger while a task is already running
+            if getattr(self, '_is_executing', False):
+                return
+
+            import re
+            
+            # ══════════════════════════════════════════════════════════
+            # INTENT DETECTION — extract WHAT the user wants done
+            # The native audio model outputs "thinking" text with headers
+            # like **Confirming Action: YouTube Playback** and phrases
+            # like "the user intends to open Chrome"
+            # ══════════════════════════════════════════════════════════
+            trigger_found = False
+            intent = ""
+            # ── Method 1: Exact trigger text (case-insensitive) ──────
+            # We strictly rely on the [CALL_TOOL: execute_computer_task] syntax
+            # to prevent hallucinating intents from internal model thought headers.
+            trigger_pattern = re.search(r'\[call_tool\s*:\s*execute_computer_task\]', text, re.IGNORECASE)
+            if trigger_pattern:
+                trigger_found = True
+                trigger_start = trigger_pattern.start()
+                trigger_end = trigger_pattern.end()
+                after = text[trigger_end:].strip()
+                before = text[:trigger_start].strip()
+                
+                # Clean after text
+                after_clean = re.sub(r'^[`\s:.\-]+', '', after).strip()
+                meta_words = ["phrase", "trigger", "command", "instruction", "proceed", "ready", "tool", "function", "generate"]
+                after_is_meta = any(w in after_clean.lower()[:60] for w in meta_words) or len(after_clean) < 3
+                
+                if not after_is_meta:
+                    intent = re.split(r'[.!]', after_clean)[0].strip()
+                else:
+                    # Find intent from the full text using action verbs
+                    full_clean = re.sub(r'\*+', '', text.lower())
+                    verb_match = re.search(
+                        r'\b(open|launch|start|play|search for|close|navigate|go to|browse to|type)\s+([a-z][a-z0-9 ]{2,40})',
+                        full_clean
+                    )
+                    if verb_match:
+                        intent = f"{verb_match.group(1)} {verb_match.group(2)}".strip()
+                        intent = re.split(r'[.,!;]', intent)[0].strip()
+                    else:
+                        # Look for quoted intent
+                        quoted = re.findall(r'["\u201c]([^"\u201d]{3,50})["\u201d]', text)
+                        if quoted:
+                            intent = quoted[0]
+                
+                clean_text = re.sub(r'\[call_tool\s*:\s*execute_computer_task\]', '', text, flags=re.IGNORECASE).strip()
+                self.ui.update_transcript(clean_text)
+                print(f"✅ Method 1 (exact trigger) matched. Intent: '{intent}'")
+            
+            # ── Method 2: "user intends to" phrase detection ─────────
+            if not trigger_found:
+                body_lower = re.sub(r'\*+', '', text.lower())
+                intent_match = re.search(
+                    r'(?:user(?:\'s)?\s+(?:intends?|wants?|request|intent)\s+(?:to|is to|is)\s+)'
+                    r'((?:open|launch|start|play|search|close|navigate|go to|browse|type|click|create|delete|run)\b.+?)(?:\.|,|\s+(?:it\'s|this|which|i\'|using|via|through|based))',
+                    body_lower
+                )
+                if intent_match:
+                    trigger_found = True
+                    intent = intent_match.group(1).strip()
+                    intent = re.split(r'[.,!;]', intent)[0].strip()
+                    print(f"✅ Method 2 (user-intent phrase) matched. Intent: '{intent}'")
+            
+            if trigger_found and intent and len(intent) > 3:
+                # Deduplication: don't trigger the same intent twice in a row
+                if not hasattr(self, '_last_triggered_intent'):
+                    self._last_triggered_intent = ""
+                    
+                if intent.lower() != self._last_triggered_intent.lower():
+                    self._last_triggered_intent = intent
+                    self._is_executing = True
+                    print(f"🛠️ Tool Trigger Detected! Intent: '{intent}'")
+                    call_id = f"text_trigger_{os.urandom(4).hex()}"
+                    asyncio.create_task(self._execute_vision_loop(intent, call_id))
+                else:
+                    print(f"⏭️ Skipping duplicate trigger: '{intent}' (already executing)")
+            elif trigger_found and not intent:
+                print(f"⚠️ Trigger detected but no intent extracted from: '{text[:100]}...'")
+
     def _on_tts_audio(self, audio_chunk: bytes):
         try:
             self.speaker_stream.write(audio_chunk)
@@ -150,6 +257,8 @@ class SUVIApplication:
         self.ui.update_state(state)
 
     def _on_tool_call(self, tool_name: str, args: dict, call_id: str):
+        # Note: Tool calling via JSON is disabled in the Live Config currently, 
+        # so this is a fallback in case Google enables it again.
         self.ui.update_state("thinking")
         
         if tool_name == "execute_computer_task":
@@ -178,68 +287,119 @@ class SUVIApplication:
     async def _run_coder_agent(self, prompt: str, lang: str, call_id: str):
         if not self.orchestrator or not self.live_service: return
         result = await self.orchestrator.generate_coding_solution(prompt, lang)
-        await self.live_service.send_tool_response([
-            types.FunctionResponse(id=call_id, name="coder_agent", response={"solution": result})
-        ])
+        
+        # Tool responses are disabled, so we speak it instead
+        await self.live_service.speak_text(result)
 
     async def _run_research_agent(self, query: str, call_id: str):
         if not self.orchestrator or not self.live_service: return
         result = await self.orchestrator.perform_research(query)
-        await self.live_service.send_tool_response([
-            types.FunctionResponse(id=call_id, name="research_agent", response={"findings": result})
-        ])
+        await self.live_service.speak_text(result)
 
     async def _run_describe_screen(self, call_id: str):
         if not self.computer_service or not self.live_service: return
         description = await self.computer_service.describe_screen()
-        await self.live_service.send_tool_response([
-            types.FunctionResponse(id=call_id, name="describe_screen", response={"description": description})
-        ])
+        await self.live_service.speak_text(description)
 
     async def _execute_vision_loop(self, intent: str, call_id: str):
-        if not self.computer_service or not self.live_service: return
-        self.ui.update_transcript("Planning task...")
+        if not self.computer_service: return
         
-        # Query via Gateway if available, otherwise local orchestrator
-        if self.gateway.ws:
-            refined_intent = await self.gateway.query_orchestrator("plan", intent)
-        elif self.orchestrator:
-            refined_intent = await self.orchestrator.plan_complex_task(intent)
-        else:
-            refined_intent = intent
-        
-        self.ui.update_state("executing")
-        self.ui.update_transcript(f"Executing: {intent}")
-        
-        self.replay_worker.set_session(call_id)
-        
-        def on_screenshot(img_bytes):
-            self.replay_worker.add_frame(img_bytes)
+        try:
+            self.ui.update_transcript("Planning task...")
+            print(f"\n🎯 [VisionLoop] Starting with intent: '{intent}'")
+            
+            # Step 1: Plan the task — use gateway only if TRULY connected
+            refined_intent = intent  # default fallback
+            try:
+                if self.gateway.is_connected:
+                    print("  📡 Routing through Gateway...")
+                    refined_intent = await self.gateway.query_orchestrator("plan", intent)
+                    # If gateway returned an error, fall through to local orchestrator
+                    if refined_intent.startswith("Error:"):
+                        print(f"  ⚠️ Gateway failed: {refined_intent}. Falling back to local.")
+                        refined_intent = intent
+                elif self.orchestrator:
+                    print("  🧠 Using local orchestrator...")
+                    refined_intent = await self.orchestrator.plan_complex_task(intent)
+                else:
+                    print("  📝 Using raw intent (no orchestrator available).")
+            except Exception as plan_err:
+                print(f"  ⚠️ Planning failed: {plan_err}. Using raw intent.")
+                refined_intent = intent
+                
+            # If we successfully planned it, gently wrap it so the execution agent
+            # knows to blindly follow the steps, rather than just chat about it.
+            if refined_intent != intent:
+                refined_intent = f"Please blindly execute the following step-by-step plan to achieve this goal ('{intent}'). Do NOT describe the steps, just use tools to do them:\n\n{refined_intent}"
+            
+            # Step 2: Execute the computer use vision loop
+            self.ui.update_state("executing")
+            self.ui.update_transcript(f"Executing: {intent}")
+            
+            self.replay_worker.set_session(call_id)
+            
+            def on_screenshot(img_bytes):
+                self.replay_worker.add_frame(img_bytes)
 
-        result = await self.computer_service.execute_task(
-            intent=refined_intent,
-            user_id=self.user_id,
-            session_id=call_id,
-            on_action=lambda d: self.ui.update_transcript(f"Action: {d}"),
-            on_screenshot=on_screenshot
-        )
-        
-        await self.memory.log_task_execution(
-            user_id=self.user_id,
-            session_id=call_id,
-            intent=intent,
-            actions=result.get("actions_taken", []),
-            status="success" if result.get("success") else "failed"
-        )
-        
-        self.replay_worker.start()
-        
-        response = types.FunctionResponse(
-            id=call_id,
-            name="execute_computer_task",
-            response={"status": "success" if result.get('success') else "failed", "summary": "Task executed on screen."}
-        )
-        await self.live_service.send_tool_response([response])
+            print(f"  🚀 Calling ComputerUseService.execute_task()...")
+            result = await self.computer_service.execute_task(
+                intent=refined_intent,
+                user_id=self.user_id,
+                session_id=call_id,
+                on_action=lambda d: self.ui.update_transcript(f"Action: {d}"),
+                on_screenshot=on_screenshot
+            )
+            
+            # Step 3: Log to memory (non-critical, don't let it break the flow)
+            try:
+                await self.memory.log_task_execution(
+                    user_id=self.user_id,
+                    session_id=call_id,
+                    intent=intent,
+                    actions=result.get("actions_taken", []),
+                    status="success" if result.get("success") else "failed"
+                )
+            except Exception as mem_err:
+                print(f"  ⚠️ Memory logging failed (non-critical): {mem_err}")
+            
+            # Step 4: Save replay (non-critical)
+            try:
+                if not self.replay_worker.isRunning():
+                    self.replay_worker.start()
+            except Exception as replay_err:
+                print(f"  ⚠️ Replay save failed (non-critical): {replay_err}")
+            
+            # Step 5: Inform the user via speech
+            success = result.get('success', False)
+            reason = result.get('reason', '')
+            actions_count = len(result.get('actions_taken', []))
+            
+            if success:
+                status_msg = f"Done. Completed {actions_count} actions successfully."
+            elif reason == "user_interrupted":
+                status_msg = "Task stopped as you requested."
+            else:
+                status_msg = f"I couldn't finish the task. Reason: {reason}"
+            
+            print(f"  ✅ [VisionLoop] Finished: {status_msg}")
+            self.ui.update_transcript(status_msg)
+            self.ui.update_state("idle")
+            self._is_executing = False
+            self._last_triggered_intent = ""  # Allow same intent to be re-triggered
+            
+            # Only speak if the live service is still running
+            if self.live_service and self.live_service._running:
+                await self.live_service.speak_text(status_msg)
+            
+        except Exception as e:
+            error_msg = f"Task execution error: {type(e).__name__}: {e}"
+            print(f"  ❌ [VisionLoop] FATAL: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            self.ui.update_transcript(f"Error: {e}")
+            self.ui.update_state("error")
+            self._is_executing = False
+            self._last_triggered_intent = ""
 
     def _save_settings_to_env(self, settings: dict):
         """Persist settings to .env file for auto-login."""

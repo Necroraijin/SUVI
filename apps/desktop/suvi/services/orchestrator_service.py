@@ -9,8 +9,8 @@ class OrchestratorService:
     and provide guidance or direct solutions for specialized domains.
     """
     
-    # Using 1.5 Flash to avoid free-tier 429 quota exhaustion
-    MODEL_ID = "gemini-2.5-pro-preview-06-05"
+    # Using Gemini 2.5 Pro as the Brain
+    MODEL_ID = "gemini-3.1-pro-preview"
 
     def __init__(self, client: genai.Client):
         self.client = client
@@ -61,10 +61,16 @@ Provide accurate, factual, and synthesized information based on the user's query
         Breaks down a complex user intent into a step-by-step plan 
         that the Desktop Agent can follow.
         """
-        prompt = f"""Break down this complex desktop task into simple, sequential steps for a UI automation agent:
-Task: {intent}
+        prompt = f"""You are the SUVI Orchestrator. 
+Your job is to take a vague user intent and break it down into an EXACT, linear step-by-step plan for a Computer Use AI Automation Agent operating a Windows desktop.
 
-Provide the plan as a numbered list. Be very specific about UI elements."""
+USER INTENT: {intent}
+
+RULES:
+1. Provide ONLY the step-by-step plan. No introductory or concluding text (e.g. do not say "Here is a breakdown").
+2. DO NOT provide options or alternative scenarios (e.g. NO "Scenario A" vs "Scenario B"). Choose the most direct path and stick to it.
+3. Address the plan directly to the execution agent.
+4. Keep the steps sequential and specific (e.g., "1. Launch Chrome.", "2. Click the address bar and navigate to YouTube")."""
 
         try:
             response = await self.client.aio.models.generate_content(
