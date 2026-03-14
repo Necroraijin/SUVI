@@ -5,7 +5,9 @@ from google import genai
 from google.genai import types
 import sounddevice as sd
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QAction, QPixmap, QPainter, QBrush
+from PyQt6.QtCore import Qt
 
 from apps.desktop.suvi.ui.widget.chat_widget import ChatWidget
 from apps.desktop.suvi.ui.login.login_window import LoginWindow
@@ -114,16 +116,88 @@ class SUVIApplication:
         asyncio.create_task(self.live_service.speak_text(message))
         self._expecting_voice_confirmation = True
 
+    def _setup_system_tray(self):
+        """Setup system tray icon with menu"""
+        # Create tray icon
+        self.tray_icon = QSystemTrayIcon(self)
+
+        # Create a simple icon (purple circle for SUVI)
+        icon = QIcon()
+        # Use a simple colored icon
+        from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setBrush(QBrush(QColor("#BB86FC")))
+        painter.drawEllipse(4, 4, 24, 24)
+        painter.end()
+        icon.addPixmap(pixmap)
+
+        self.tray_icon.setIcon(icon)
+        self.tray_icon.setToolTip("SUVI - Voice Assistant")
+
+        # Create context menu
+        menu = QMenu()
+
+        show_panel = QAction("📋 Open SUVI Panel")
+        show_panel.triggered.connect(self.show_panel)
+        menu.addAction(show_panel)
+
+        toggle_overlay = QAction("🎙️ Toggle Voice Overlay")
+        toggle_overlay.triggered.connect(self._toggle_overlay)
+        menu.addAction(toggle_overlay)
+
+        menu.addSeparator()
+
+        quit_action = QAction("❌ Quit SUVI")
+        quit_action.triggered.connect(QApplication.quit)
+        menu.addAction(quit_action)
+
+        self.tray_icon.setContextMenu(menu)
+
+        # Double-click to show panel
+        self.tray_icon.activated.connect(self._on_tray_double_click)
+
+        self.tray_icon.show()
+        print("✅ System tray initialized")
+
+    def _on_tray_double_click(self, reason):
+        """Handle tray icon double-click"""
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.show_panel()
+
+    def _toggle_overlay(self):
+        """Toggle the voice overlay visibility"""
+        if self.ui.isVisible():
+            self.ui.hide()
+        else:
+            self.ui.show()
+
     def _on_user_interrupt(self):
         print("\n🛑 User pressed STOP button!")
         self.ui.update_state("idle")
-        self.ui.update_transcript("Session stopped. Waiting for 'Hey SUVI'...")
-        
+        self.ui.update_transcript("Session stopped. Say 'Hey SUVI' or click Start...")
+
         if self.computer_service:
             self.computer_service.interrupt()
-        
+
         if self.voice_worker.isRunning():
             self.voice_worker.stop()
+
+    def show_panel(self):
+        """Show the SUVI Panel"""
+        if self.login_window:
+            self.login_window.show_panel()
+
+    def hide_panel(self):
+        """Hide the SUVI Panel"""
+        if self.login_window:
+            self.login_window.hide_panel()
+
+    def toggle_panel(self):
+        """Toggle the SUVI Panel"""
+        if self.login_window:
+            self.login_window.toggle_panel()
             
         if self.live_service:
             asyncio.create_task(self.live_service.stop())
@@ -166,6 +240,19 @@ class SUVIApplication:
 
             # Guard: don't re-trigger while a task is already running
             if getattr(self, '_is_executing', False):
+                return
+
+            # ── Special commands for SUVI Panel ──
+            text_lower = text.lower()
+            # Check for panel commands
+            if any(phrase in text_lower for phrase in ["open suvi panel", "show panel", "show suvi settings", "open settings"]):
+                print("🖥️ Opening SUVI Panel...")
+                self.show_panel()
+                return
+
+            if any(phrase in text_lower for phrase in ["close panel", "hide panel", "close suvi", "minimize panel"]):
+                print("🖥️ Hiding SUVI Panel...")
+                self.hide_panel()
                 return
 
             import re
@@ -511,7 +598,10 @@ class SUVIApplication:
         print("Starting SUVI Desktop Application...")
         self.login_window = LoginWindow()
         self.login_window.ready_to_start.connect(lambda s: asyncio.ensure_future(self._on_launch_requested(s)))
-        
+
+        # Setup system tray
+        self._setup_system_tray()
+
         try:
             while True:
                 await asyncio.sleep(1)

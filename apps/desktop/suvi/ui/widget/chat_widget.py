@@ -52,11 +52,32 @@ class ChatWidget(QWidget):
         
         # --- Top Row: Status & Toggle ---
         header_layout = QHBoxLayout()
+
+        # Close button (X) - top left
+        self.close_btn = QPushButton("✕", self.container)
+        self.close_btn.setFixedSize(24, 24)
+        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #666;
+                border: none;
+                font-size: 14px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: rgba(207, 102, 121, 0.3);
+                color: #CF6679;
+            }
+        """)
+        self.close_btn.clicked.connect(self._on_close_clicked)
+        header_layout.addWidget(self.close_btn)
+
         self.status_label = QLabel("⚪ SUVI IDLE", self.container)
         self.status_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self.status_label.setStyleSheet("color: #FFFFFF; background: transparent;")
         header_layout.addWidget(self.status_label)
-        
+
         header_layout.addStretch()
         
         self.toggle_btn = QPushButton("▶ Start", self.container)
@@ -152,6 +173,12 @@ class ChatWidget(QWidget):
         layout.addWidget(self.container)
         
         self._center_on_screen()
+
+    def _on_close_clicked(self):
+        """Close/hide the overlay"""
+        self.hide()
+        # Emit signal so main app knows to show panel
+        self.interrupt_requested.emit()
 
     def _on_toggle_clicked(self):
         self.is_session_active = not self.is_session_active
