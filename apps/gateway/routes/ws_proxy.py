@@ -70,11 +70,12 @@ async def websocket_session(websocket: WebSocket, session_id: str, token: str = 
                 query_type = message.get("query_type") # e.g., 'plan', 'code'
                 prompt = message.get("prompt")
                 query_id = message.get("query_id")
-                
+                env_context = message.get("env_context", "")  # Get environment context from desktop app
+
                 print(f"Bridging {query_type} query for session {session_id}")
-                
+
                 if query_type == "plan":
-                    result = await orch_proxy.get_plan(prompt)
+                    result = await orch_proxy.get_plan(prompt, env_context)
                 elif query_type == "code":
                     result = await orch_proxy.get_code(prompt)
                 else:

@@ -181,40 +181,69 @@ class SUVIApplication:
             # ── Method 1: Exact trigger text (case-insensitive) ──────
             # We strictly rely on the [CALL_TOOL: execute_computer_task] syntax
             # to prevent hallucinating intents from internal model thought headers.
-            trigger_pattern = re.search(r'\[call_tool\s*:\s*execute_computer_task\]', text, re.IGNORECASE)
+
+            # First, strip markdown headers like **Thinking** etc before processing
+            text_clean = re.sub(r'\*+[^*]+\*+', '', text)  # Remove **markdown headers**
+
+            trigger_pattern = re.search(r'\[call_tool\s*:\s*execute_computer_task\]', text_clean, re.IGNORECASE)
             if trigger_pattern:
                 trigger_found = True
                 trigger_start = trigger_pattern.start()
                 trigger_end = trigger_pattern.end()
-                after = text[trigger_end:].strip()
-                before = text[:trigger_start].strip()
-                
-                # Clean after text
-                after_clean = re.sub(r'^[`\s:.\-]+', '', after).strip()
-                meta_words = ["phrase", "trigger", "command", "instruction", "proceed", "ready", "tool", "function", "generate"]
-                after_is_meta = any(w in after_clean.lower()[:60] for w in meta_words) or len(after_clean) < 3
-                
-                if not after_is_meta:
+                after = text_clean[trigger_end:].strip()
+                before = text_clean[:trigger_start].strip()
+
+                # Try to extract intent from AFTER the trigger first
+                intent = ""
+                after_clean = re.sub(r'^[`\s:.\-"\'>]+', '', after).strip()
+
+                if after_clean and len(after_clean) >= 3:
+                    # Text after trigger - take first sentence/phrase
                     intent = re.split(r'[.!]', after_clean)[0].strip()
-                else:
-                    # Find intent from the full text using action verbs
-                    full_clean = re.sub(r'\*+', '', text.lower())
+
+                # If no intent after trigger, try BEFORE the trigger (the actual command)
+                if not intent or len(intent) < 3:
+                    # Look for verb + object pattern in the text BEFORE trigger
+                    full_text = (before + " " + after).lower()
+                    full_text = re.sub(r'\*+', '', full_text)  # Remove markdown
                     verb_match = re.search(
-                        r'\b(open|launch|start|play|search for|close|navigate|go to|browse to|type)\s+([a-z][a-z0-9 ]{2,40})',
-                        full_clean
+                        r'\b(open|launch|start|play|search for|search|close|navigate|go to|browse to|browse|type|click|create|delete|run|write|read|save|delete)\s+([a-z][a-z0-9 ]{2,50})',
+                        full_text
                     )
                     if verb_match:
                         intent = f"{verb_match.group(1)} {verb_match.group(2)}".strip()
                         intent = re.split(r'[.,!;]', intent)[0].strip()
-                    else:
-                        # Look for quoted intent
-                        quoted = re.findall(r'["\u201c]([^"\u201d]{3,50})["\u201d]', text)
-                        if quoted:
-                            intent = quoted[0]
-                
-                clean_text = re.sub(r'\[call_tool\s*:\s*execute_computer_task\]', '', text, flags=re.IGNORECASE).strip()
+
+                # Clean up intent - remove trailing quotes, punctuation, backticks
+                if intent:
+                    intent = re.sub(r'["\'\`]+$', '', intent).strip()  # Remove trailing quotes/backticks
+                    intent = re.sub(r'^["\'\`]+', '', intent).strip()  # Remove leading quotes
+
+                # Last resort: look for quoted text anywhere
+                if not intent or len(intent) < 3:
+                    quoted = re.findall(r'["\u201c]([^"\u201d]{3,50})["\u201d]', text_clean, re.IGNORECASE)
+                    if quoted:
+                        intent = quoted[0]
+
+                # ULTIMATE FALLBACK: Look for common command patterns anywhere in original text
+                if not intent or len(intent) < 5:
+                    # Find any complete command pattern
+                    command_patterns = [
+                        r'\b(write\s+(?:a\s+)?(?:story|note|message|text|email|letter|code|function|list|content)\s+(?:in|on|using|with)\s+\w+)',
+                        r'\b(open|launch|start|play|search\s+for|search|close|navigate|go\s+to|browse|type|click|create|delete|run|read|save)\s+[a-z][a-z0-9\s]{2,40}',
+                    ]
+                    for pattern in command_patterns:
+                        match = re.search(pattern, text_clean.lower())
+                        if match:
+                            intent = match.group(0).strip()
+                            break
+
+                clean_text = re.sub(r'\[call_tool\s*:\s*execute_computer_task\]', '', text_clean, flags=re.IGNORECASE).strip()
                 self.ui.update_transcript(clean_text)
-                print(f"✅ Method 1 (exact trigger) matched. Intent: '{intent}'")
+                print(f"✅ Method 1 (exact trigger) matched.")
+                print(f"   📝 Text after trigger: '{after[:80] if after else '(empty)'}'")
+                print(f"   📝 Text before trigger: '{before[:80] if before else '(empty)'}'")
+                print(f"   📝 Final intent: '{intent}'")
             
             # ── Method 2: "user intends to" phrase detection ─────────
             if not trigger_found:
@@ -309,18 +338,20 @@ class SUVIApplication:
             print(f"\n🎯 [VisionLoop] Starting with intent: '{intent}'")
             
             # Step 1: Plan the task — use gateway only if TRULY connected
+            # Get environment context first so both gateway and local orchestrator can use it
+            env_context = self.env_scanner.get_context_for_ai() if self.env_scanner else ""
             refined_intent = intent  # default fallback
             try:
                 if self.gateway.is_connected:
                     print("  📡 Routing through Gateway...")
-                    refined_intent = await self.gateway.query_orchestrator("plan", intent)
+                    refined_intent = await self.gateway.query_orchestrator("plan", intent, env_context)
                     # If gateway returned an error, fall through to local orchestrator
                     if refined_intent.startswith("Error:"):
                         print(f"  ⚠️ Gateway failed: {refined_intent}. Falling back to local.")
                         refined_intent = intent
                 elif self.orchestrator:
                     print("  🧠 Using local orchestrator...")
-                    refined_intent = await self.orchestrator.plan_complex_task(intent)
+                    refined_intent = await self.orchestrator.plan_complex_task(intent, env_context)
                 else:
                     print("  📝 Using raw intent (no orchestrator available).")
             except Exception as plan_err:

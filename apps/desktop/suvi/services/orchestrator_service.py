@@ -56,21 +56,34 @@ Provide accurate, factual, and synthesized information based on the user's query
         except Exception as e:
             return f"Error in Research Agent: {str(e)}"
 
-    async def plan_complex_task(self, intent: str) -> str:
+    async def plan_complex_task(self, intent: str, env_context: str = "") -> str:
         """
-        Breaks down a complex user intent into a step-by-step plan 
+        Breaks down a complex user intent into a step-by-step plan
         that the Desktop Agent can follow.
         """
-        prompt = f"""You are the SUVI Orchestrator. 
-Your job is to take a vague user intent and break it down into an EXACT, linear step-by-step plan for a Computer Use AI Automation Agent operating a Windows desktop.
+        # Build the prompt with environment context
+        env_section = f"""
+CURRENT USER ENVIRONMENT:
+{env_context}
 
+IMPORTANT: Use the above environment info to create a realistic plan.
+If an app is NOT in the installed apps list, either:
+- Use an alternative app that's installed, OR
+- Use the default browser to access a web-based version
+
+""" if env_context else ""
+
+        prompt = f"""You are the SUVI Orchestrator.
+Your job is to take a vague user intent and break it down into an EXACT, linear step-by-step plan for a Computer Use AI Automation Agent operating a Windows desktop.
+{env_section}
 USER INTENT: {intent}
 
 RULES:
 1. Provide ONLY the step-by-step plan. No introductory or concluding text (e.g. do not say "Here is a breakdown").
 2. DO NOT provide options or alternative scenarios (e.g. NO "Scenario A" vs "Scenario B"). Choose the most direct path and stick to it.
 3. Address the plan directly to the execution agent.
-4. Keep the steps sequential and specific (e.g., "1. Launch Chrome.", "2. Click the address bar and navigate to YouTube")."""
+4. Keep the steps sequential and specific (e.g., "1. Launch Chrome.", "2. Click the address bar and navigate to YouTube").
+5. NEVER assume an app is installed unless it's listed in the environment info above."""
 
         try:
             response = await self.client.aio.models.generate_content(

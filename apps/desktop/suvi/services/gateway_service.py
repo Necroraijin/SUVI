@@ -79,7 +79,7 @@ class GatewayService:
                 "data": data
             }))
 
-    async def query_orchestrator(self, query_type: str, prompt: str) -> str:
+    async def query_orchestrator(self, query_type: str, prompt: str, env_context: str = "") -> str:
         """Sends a query to the orchestrator via the gateway proxy and awaits the result."""
         if not self.is_connected:
             return "Error: Not connected to gateway"
@@ -95,7 +95,8 @@ class GatewayService:
                 "type": "agent_query",
                 "query_id": query_id,
                 "query_type": query_type,
-                "prompt": prompt
+                "prompt": prompt,
+                "env_context": env_context
             }))
         except Exception as e:
             # WebSocket died between the is_connected check and the send
