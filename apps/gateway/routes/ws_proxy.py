@@ -3,8 +3,8 @@ import json
 import asyncio
 import os
 from typing import Dict
-from apps.gateway.middleware.auth import verify_token
-from apps.gateway.services.orchestrator_proxy import OrchestratorProxy
+from middleware.auth import verify_token
+from services.orchestrator_proxy import OrchestratorProxy
 
 router = APIRouter()
 
