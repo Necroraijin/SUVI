@@ -1,16 +1,19 @@
+# Use the official lightweight Python image.
+# https://hub.docker.com/_/python
 FROM python:3.12-slim
 
+# Allow statements and errors to be immediately logged to the Cloud Run logs
 ENV PYTHONUNBUFFERED True
+
+# Copy local code to the container image.
 ENV APP_HOME /app
 WORKDIR $APP_HOME
-
-# Copy entire repo (Cloud Run GitHub deploys from root)
 COPY . ./
 
-# Point to gateway requirements specifically
-RUN pip install --no-cache-dir -r apps/gateway/requirements.txt
+# Install production dependencies.
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Run the web service on container startup.
+# We set a default PORT to 8080 if not provided by Cloud Run.
 ENV PORT=8080
-ENV PYTHONPATH=/app
-
 CMD ["uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
