@@ -16,4 +16,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Run the web service on container startup.
 # We set a default PORT to 8080 if not provided by Cloud Run.
 ENV PORT=8080
-CMD exec uvicorn apps.gateway.main:app --host 0.0.0.0 --port ${PORT}
+CMD ["uvicorn", "apps.gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
