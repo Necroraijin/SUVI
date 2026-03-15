@@ -24,8 +24,8 @@ def main():
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     
-    # 3. Initialize SUVI App (API key is optional now, can be set in UI)
-    suvi_app = SUVIApplication(api_key=api_key)
+    # 3. Initialize SUVI App
+    suvi_app = SUVIApplication()
     
     # 4. Run the asyncio event loop
     with loop:

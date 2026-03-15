@@ -95,16 +95,11 @@ Be a helpful companion."""
         Custom functions go in a SEPARATE types.Tool(function_declarations=...).
         See: https://ai.google.dev/gemini-api/docs/computer-use#custom-functions
         """
-        # Tool 1: The REQUIRED Computer Use tool — this gives the model its
-        # built-in UI actions (click, type, scroll, etc.)
-        computer_use_tool = Tool(
+        # Combine into a SINGLE Tool object to avoid AFC array index errors
+        combined_tool = Tool(
             computer_use=types.ComputerUse(
                 environment=types.Environment.ENVIRONMENT_UNSPECIFIED,
-            )
-        )
-        
-        # Tool 2: Custom functions for actions outside the model's built-in capabilities
-        custom_functions_tool = Tool(
+            ),
             function_declarations=[
                 types.FunctionDeclaration(
                     name="launch_application",
@@ -142,7 +137,7 @@ Be a helpful companion."""
             ]
         )
         
-        return [computer_use_tool, custom_functions_tool]
+        return [combined_tool]
 
     async def execute_task(
         self,
@@ -153,7 +148,7 @@ Be a helpful companion."""
         on_screenshot: callable = None,
     ) -> dict:
         self._interrupt_requested = False
-        max_turns = 15
+        max_turns = 30
         actions_taken = []
         
         # System instruction for the Computer Use agent

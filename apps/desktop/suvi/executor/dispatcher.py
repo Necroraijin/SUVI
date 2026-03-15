@@ -154,7 +154,7 @@ class ActionDispatcher:
                     return f"APP_NOT_FOUND: '{app_name}' is not installed on this computer.{alt_msg}"
                 
                 app_map = {
-                    "chrome": "chrome" if sys.platform == "win32" else "google-chrome",
+                    "chrome": "chrome",
                     "google chrome": "chrome",
                     "firefox": "firefox",
                     "notepad": "notepad",
@@ -172,12 +172,20 @@ class ActionDispatcher:
                 }
                 cmd = app_map.get(app_name, app_name)
 
-                if sys.platform == "win32":
-                    await asyncio.to_thread(subprocess.Popen, f"start {cmd}", shell=True)
-                elif sys.platform == "darwin":
-                    await asyncio.to_thread(subprocess.Popen, ["open", "-a", cmd])
-                else:
-                    await asyncio.to_thread(subprocess.Popen, [cmd])
+                try:
+                    if sys.platform == "win32":
+                        # Windows start command requires an empty string for the window title
+                        # before the actual command, otherwise paths/names with spaces break it.
+                        await asyncio.to_thread(subprocess.Popen, f'start "" "{cmd}"', shell=True)
+                    elif sys.platform == "darwin":
+                        mac_cmd = "Google Chrome" if app_name in ["chrome", "google chrome"] else cmd
+                        await asyncio.to_thread(subprocess.Popen, ["open", "-a", mac_cmd])
+                    else:
+                        linux_cmd = "google-chrome" if app_name in ["chrome", "google chrome"] else cmd
+                        await asyncio.to_thread(subprocess.Popen, [linux_cmd])
+                except Exception as e:
+                    print(f"❌ Failed to launch {app_name}: {e}")
+                    return f"failed_to_launch: {str(e)}"
                     
             elif action_name == "open_url":
                 import webbrowser

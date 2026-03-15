@@ -119,7 +119,7 @@ class SUVIApplication:
     def _setup_system_tray(self):
         """Setup system tray icon with menu"""
         # Create tray icon
-        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon = QSystemTrayIcon()
 
         # Create a simple icon (purple circle for SUVI)
         icon = QIcon()
