@@ -66,11 +66,14 @@ class SUVIApplication:
             client = genai.Client(api_key=self.api_key)
             
             self.live_service = GeminiLiveService(client)
-            self.computer_service = ComputerUseService(client, ui_widget=ui_widget, env_scanner=self.env_scanner)
+            self.computer_service = ComputerUseService(
+            client=client,
+            ui_widget=ui_widget,
+            env_scanner=self.env_scanner)
             self.orchestrator = OrchestratorService(client)
         except Exception as e:
             print(f"❌ Critical Error initializing AI services: {e}")
-            self.ui.update_transcript(f"System Error: Failed to initialize AI services. {e}")
+            if self.ui: self.ui.update_transcript(f"System Error: Failed to initialize AI services. {e}")
 
     def _setup_connections(self):
         # Wake Word

@@ -1,65 +1,250 @@
-import asyncio
+# import asyncio
+# from google.genai import types
+
+# def get_function_declarations():
+#     """
+#     Returns the tool definitions that we expose to the Live Audio session.
+#     The Live Audio model cannot click/type on its own, but it can CALL these functions
+#     which we will then intercept and pass to the Computer Use Vertex AI model.
+#     """
+#     return [
+#         types.FunctionDeclaration(
+#             name="execute_computer_task",
+#             description="Executes a visual UI task on the user's computer (clicking, typing, scrolling, finding information on screen). Call this when the user asks you to interact with their desktop, open apps, click things, or read their screen.",
+#             parameters=types.Schema(
+#                 type=types.Type.OBJECT,
+#                 properties={
+#                     "intent": types.Schema(
+#                         type=types.Type.STRING,
+#                         description="A detailed, actionable description of what needs to be done on the screen."
+#                     )
+#                 },
+#                 required=["intent"]
+#             )
+#         ),
+#         types.FunctionDeclaration(
+#             name="coder_agent",
+#             description="Invokes a specialized coding agent for writing, debugging, or explaining code. Use this when the user has complex programming questions or needs code generated.",
+#             parameters=types.Schema(
+#                 type=types.Type.OBJECT,
+#                 properties={
+#                     "prompt": types.Schema(
+#                         type=types.Type.STRING,
+#                         description="The coding task or question."
+#                     ),
+#                     "language": types.Schema(
+#                         type=types.Type.STRING,
+#                         description="The programming language (e.g., python, javascript)."
+#                     )
+#                 },
+#                 required=["prompt"]
+#             )
+#         ),
+#         types.FunctionDeclaration(
+#             name="research_agent",
+#             description="Invokes a research agent to search the web and synthesize information. Use this for facts, news, or complex information gathering that isn't on the user's screen.",
+#             parameters=types.Schema(
+#                 type=types.Type.OBJECT,
+#                 properties={
+#                     "query": types.Schema(
+#                         type=types.Type.STRING,
+#                         description="The search query or research topic."
+#                     )
+#                 },
+#                 required=["query"]
+#             )
+#         ),
+#         types.FunctionDeclaration(
+#             name="describe_screen",
+#             description="Captures the user's screen and provides a detailed verbal description of what is visible. Use this when the user asks 'what's on my screen?', 'can you see this?', or if they are visually impaired and need navigation help.",
+#         ),
+#         types.FunctionDeclaration(
+#             name="stop_execution",
+#             description="Immediately halts any ongoing computer task. Call this if the user says 'stop', 'cancel', or 'wait'.",
+#         )
+#     ]
+
+
 from google.genai import types
+
+# -----------------------------------------------------------
+
+# TOOL SCHEMA
+
+# -----------------------------------------------------------
 
 def get_function_declarations():
     """
-    Returns the tool definitions that we expose to the Live Audio session.
-    The Live Audio model cannot click/type on its own, but it can CALL these functions
-    which we will then intercept and pass to the Computer Use Vertex AI model.
+    Tools available to the Gemini Live voice model.
+
+
+    The Live model cannot control the computer directly,
+    so it must call these tools which SUVI routes to the
+    appropriate backend agents.
     """
     return [
+
         types.FunctionDeclaration(
             name="execute_computer_task",
-            description="Executes a visual UI task on the user's computer (clicking, typing, scrolling, finding information on screen). Call this when the user asks you to interact with their desktop, open apps, click things, or read their screen.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "intent": types.Schema(
-                        type=types.Type.STRING,
-                        description="A detailed, actionable description of what needs to be done on the screen."
-                    )
-                },
-                required=["intent"]
-            )
-        ),
+            description="""
+
+
+    Execute a task on the user's desktop computer.
+
+    Examples:
+
+    * open chrome
+    * search cats on youtube
+    * open notepad and type hello
+    * scroll the page
+    * click the first result
+      """,
+      parameters=types.Schema(
+      type=types.Type.OBJECT,
+      properties={
+      "intent": types.Schema(
+      type=types.Type.STRING,
+      description="The full natural language instruction describing the desktop task."
+      )
+      },
+      required=["intent"],
+      ),
+      ),
+
+      
         types.FunctionDeclaration(
             name="coder_agent",
-            description="Invokes a specialized coding agent for writing, debugging, or explaining code. Use this when the user has complex programming questions or needs code generated.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "prompt": types.Schema(
-                        type=types.Type.STRING,
-                        description="The coding task or question."
-                    ),
-                    "language": types.Schema(
-                        type=types.Type.STRING,
-                        description="The programming language (e.g., python, javascript)."
-                    )
-                },
-                required=["prompt"]
-            )
-        ),
+            description="""
+      
+
+    Use this when the user asks for programming help.
+
+    Examples:
+
+    * write python quicksort
+    * fix this javascript error
+    * explain this code
+      """,
+      parameters=types.Schema(
+      type=types.Type.OBJECT,
+      properties={
+      "prompt": types.Schema(
+      type=types.Type.STRING,
+      description="The coding request."
+      ),
+      "language": types.Schema(
+      type=types.Type.STRING,
+      description="Optional programming language."
+      ),
+      },
+      required=["prompt"],
+      ),
+      ),
+
+      
         types.FunctionDeclaration(
             name="research_agent",
-            description="Invokes a research agent to search the web and synthesize information. Use this for facts, news, or complex information gathering that isn't on the user's screen.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={
-                    "query": types.Schema(
-                        type=types.Type.STRING,
-                        description="The search query or research topic."
-                    )
-                },
-                required=["query"]
-            )
-        ),
+            description="""
+      
+
+    Use this when the user asks factual questions or research queries.
+
+    Examples:
+
+    * what is quantum computing
+    * latest AI news
+    * explain black holes
+      """,
+      parameters=types.Schema(
+      type=types.Type.OBJECT,
+      properties={
+      "query": types.Schema(
+      type=types.Type.STRING,
+      description="The research query."
+      )
+      },
+      required=["query"],
+      ),
+      ),
+
+      
         types.FunctionDeclaration(
             name="describe_screen",
-            description="Captures the user's screen and provides a detailed verbal description of what is visible. Use this when the user asks 'what's on my screen?', 'can you see this?', or if they are visually impaired and need navigation help.",
-        ),
+            description="""
+      
+
+    Describe the current desktop screen for accessibility.
+
+    Use when user asks:
+
+    * what is on my screen
+    * can you see this
+    * describe the screen
+      """
+      ),
+
+      
         types.FunctionDeclaration(
             name="stop_execution",
-            description="Immediately halts any ongoing computer task. Call this if the user says 'stop', 'cancel', or 'wait'.",
-        )
+            description="""
+      
+
+    Stop the currently running automation task.
+
+    Triggered when the user says:
+
+    * stop
+    * cancel
+    * abort
+      """
+      ),
+
+      ]
+
+# -----------------------------------------------------------
+
+# TRIGGER PARSER
+
+# -----------------------------------------------------------
+def extract_computer_task(text: str) -> str | None: 
+    """
+    Extracts the command from the trigger format.
+    
+    
+    Example input:
+    "[CALL_TOOL: execute_computer_task] open chrome"
+    
+    Returns:
+    "open chrome"
+    """
+    
+    if not text:
+        return None
+    
+    trigger = "[CALL_TOOL: execute_computer_task]"
+    
+    if trigger not in text:
+        return None
+    
+    return text.split(trigger, 1)[1].strip()
+
+# -----------------------------------------------------------
+
+# HELPER DETECTORS
+
+# -----------------------------------------------------------
+
+def is_stop_command(text: str) -> bool:
+    """Checks if the text contains a stop command."""
+    
+    text = text.lower()
+    
+    stop_words = [
+        "stop",
+        "cancel",
+        "abort",
+        "wait",
+        "pause"
     ]
+    
+    return any(word in text for word in stop_words)

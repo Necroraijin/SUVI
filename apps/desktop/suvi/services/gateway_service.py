@@ -5,91 +5,129 @@ import os
 
 class GatewayService:
     """
-    Manages the persistent connection between the Desktop App and the Cloud Gateway.
-    Proxies orchestrator requests and sends telemetry.
+    Persistent connection between Desktop SUVI and Cloud Gateway.
+    Handles orchestrator queries and telemetry.
     """
+
     def __init__(self):
         self.ws = None
-        self.gateway_url = os.getenv("GATEWAY_URL", "wss://suvi-google-gemini-live-hackathon-722150734142.us-central1.run.app/ws/session")
-        self.token = "mock_token" # In reality, fetched from AuthService
-        self.session_id = "default_session"
+        self.gateway_url = os.getenv(
+            "GATEWAY_URL",
+            "wss://suvi-google-gemini-live-hackathon-722150734142.us-central1.run.app/ws/session"
+        )
+        self.session_id = None
+        self.token = None
         self._pending_queries = {}
         self._query_counter = 0
+        self._listen_task = None
+        self._ping_task = None
 
+    # -----------------------------------------------------------
+    # CONNECTION
+    # -----------------------------------------------------------
     async def connect(self, session_id: str, token: str):
         self.session_id = session_id
         self.token = token
-        
         url = f"{self.gateway_url}/{session_id}?token={token}"
-        print(f"🔗 Connecting to Gateway at {url}...")
-        
-        try:
-            self.ws = await websockets.connect(url)
-            print("✅ Connected to Gateway.")
-            asyncio.create_task(self._listen())
-        except Exception as e:
-            print(f"❌ Failed to connect to Gateway: {e}")
+        print(f"🔗 Connecting to Gateway: {url}")
 
+        try:
+            self.ws = await websockets.connect(
+                url,
+                ping_interval=None,  # we handle ping manually
+                max_size=10_000_000
+            )
+            print("✅ Connected to Gateway.")
+            self._listen_task = asyncio.create_task(self._listen())
+            self._ping_task = asyncio.create_task(self._ping_loop())
+        except Exception as e:
+            print(f"❌ Gateway connection failed: {e}")
+            self.ws = None
+
+    # -----------------------------------------------------------
+    # CONNECTION STATE
+    # -----------------------------------------------------------
     @property
     def is_connected(self) -> bool:
-        """Reliable check: ws exists and appears connected."""
         if self.ws is None:
             return False
         try:
-            # websockets v12+ uses .state, older uses .open
-            if hasattr(self.ws, 'open'):
+            if hasattr(self.ws, "open"):
                 return self.ws.open
-            # For newer websockets, check if state is OPEN
             import websockets.connection
             return self.ws.state == websockets.connection.State.OPEN
         except Exception:
             return False
 
+    # -----------------------------------------------------------
+    # LISTENER
+    # -----------------------------------------------------------
     async def _listen(self):
         try:
             async for message in self.ws:
                 data = json.loads(message)
-                if data.get("type") == "agent_response":
+                msg_type = data.get("type")
+
+                if msg_type == "agent_response":
                     query_id = data.get("query_id")
-                    if query_id and query_id in self._pending_queries:
-                        self._pending_queries[query_id].set_result(data.get("result", ""))
-                    else:
-                        print(f"📥 Received from Gateway: {data}")
-                        if self._pending_queries:
-                            first_key = list(self._pending_queries.keys())[0]
-                            self._pending_queries[first_key].set_result(data.get("result", ""))
+                    if query_id in self._pending_queries:
+                        future = self._pending_queries.pop(query_id)
+                        if not future.done():
+                            future.set_result(data.get("result", ""))
+                elif msg_type == "ping":
+                    # gateway heartbeat
+                    pass
                 else:
-                    print(f"📥 Received from Gateway: {data}")
+                    print("📥 Gateway message:", data)
         except Exception as e:
             print(f"⚠️ Gateway connection lost: {e}")
         finally:
-            # CRITICAL: Clear the stale reference so we don't route through a dead socket
-            self.ws = None
-            # Fail any pending queries so they don't hang forever
-            for qid, future in list(self._pending_queries.items()):
-                if not future.done():
-                    future.set_result("Error: Gateway connection lost")
-            self._pending_queries.clear()
-            print("🔌 Gateway WebSocket reference cleared.")
+            await self._handle_disconnect()
 
+    # -----------------------------------------------------------
+    # PING LOOP (prevents Cloud Run idle timeout)
+    # -----------------------------------------------------------
+    async def _ping_loop(self):
+        while self.is_connected:
+            try:
+                await asyncio.sleep(20)
+                await self.ws.send(json.dumps({"type": "ping"}))
+            except Exception:
+                break
+
+    # -----------------------------------------------------------
+    # SEND TELEMETRY
+    # -----------------------------------------------------------
     async def send_telemetry(self, data: dict):
-        if self.ws:
+        if not self.is_connected:
+            return
+        try:
             await self.ws.send(json.dumps({
                 "type": "telemetry",
                 "data": data
             }))
+        except Exception:
+            await self._handle_disconnect()
 
-    async def query_orchestrator(self, query_type: str, prompt: str, env_context: str = "") -> str:
-        """Sends a query to the orchestrator via the gateway proxy and awaits the result."""
+    # -----------------------------------------------------------
+    # ORCHESTRATOR QUERY
+    # -----------------------------------------------------------
+    async def query_orchestrator(
+        self,
+        query_type: str,
+        prompt: str,
+        env_context: str = ""
+    ) -> str:
         if not self.is_connected:
-            return "Error: Not connected to gateway"
-            
+            return "Error: Gateway not connected"
+
         self._query_counter += 1
         query_id = f"q_{self._query_counter}"
-        
-        future = asyncio.get_event_loop().create_future()
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
         self._pending_queries[query_id] = future
-        
+
         try:
             await self.ws.send(json.dumps({
                 "type": "agent_query",
@@ -99,21 +137,39 @@ class GatewayService:
                 "env_context": env_context
             }))
         except Exception as e:
-            # WebSocket died between the is_connected check and the send
             self._pending_queries.pop(query_id, None)
-            self.ws = None
-            print(f"⚠️ Gateway send failed: {e}")
-            return f"Error: Gateway send failed: {e}"
-        
+            await self._handle_disconnect()
+            return f"Gateway send error: {e}"
+
         try:
-            result = await asyncio.wait_for(future, timeout=60.0)
-            return result
+            return await asyncio.wait_for(future, timeout=60)
         except asyncio.TimeoutError:
-            return "Error: Gateway orchestrator request timed out."
-        finally:
             self._pending_queries.pop(query_id, None)
-        
+            return "Gateway request timeout"
+
+    # -----------------------------------------------------------
+    # CLEAN DISCONNECT
+    # -----------------------------------------------------------
+    async def _handle_disconnect(self):
+        if self.ws:
+            try:
+                await self.ws.close()
+            except Exception:
+                pass
+        self.ws = None
+
+        for future in self._pending_queries.values():
+            if not future.done():
+                future.set_result("Error: Gateway connection lost")
+
+        self._pending_queries.clear()
+        print("🔌 Gateway connection closed.")
+
     async def disconnect(self):
         if self.ws:
             await self.ws.close()
-            print("Disconnected from Gateway.")
+        if self._listen_task:
+            self._listen_task.cancel()
+        if self._ping_task:
+            self._ping_task.cancel()
+        print("Gateway disconnected.")

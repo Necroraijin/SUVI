@@ -5,23 +5,69 @@ from google.genai import types
 
 class OrchestratorService:
     """
-    The 'Brain' of SUVI. Uses Gemini 2.5 Pro to reason about complex tasks
-    and provide guidance or direct solutions for specialized domains.
+    SUVI's central reasoning engine.
+
+    Responsibilities:
+    - Task classification
+    - Complex task planning
+    - Coding assistance
+    - Research assistance
     """
-    
-    # Using Gemini 2.5 Pro as the Brain
-    MODEL_ID = "gemini-3.1-pro-preview"
+
+    MODEL_ID = "gemini-2.5-pro"
 
     def __init__(self, client: genai.Client):
         self.client = client
 
-    async def generate_coding_solution(self, prompt: str, language: Optional[str] = None) -> str:
-        """Invokes the Pro model to solve programming tasks."""
-        system_instruction = f"""You are SUVI's Coder Agent. You are a world-class software engineer.
-Your goal is to provide clean, efficient, and well-documented code or bug fixes.
-User language preference: {language if language else 'Any'}
-Provide the solution clearly and concisely."""
+    # ---------------------------------------------------------
+    # TASK CLASSIFIER
+    # ---------------------------------------------------------
+    async def classify_intent(self, user_input: str) -> str:
+        """
+        Determine which agent should handle the task.
+        """
+        prompt = f"""
+Classify the user request into ONE category.
 
+User request:
+{user_input}
+
+Categories:
+desktop → controlling computer or apps
+coding → programming help
+research → information or questions
+
+Respond with ONLY one word:
+desktop
+coding
+research
+"""
+        try:
+            response = await self.client.aio.models.generate_content(
+                model=self.MODEL_ID,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0
+                )
+            )
+            result = response.text.strip().lower()
+            if "coding" in result:
+                return "coding"
+            if "research" in result:
+                return "research"
+            return "desktop"
+        except Exception:
+            return "desktop"
+
+    # ---------------------------------------------------------
+    # CODING AGENT
+    # ---------------------------------------------------------
+    async def generate_coding_solution(self, prompt: str, language: Optional[str] = None) -> str:
+        system_instruction = f"""
+You are SUVI's coding expert.
+Provide clean, correct, well documented code.
+Preferred language: {language if language else "any"}
+"""
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.MODEL_ID,
@@ -33,58 +79,55 @@ Provide the solution clearly and concisely."""
             )
             return response.text
         except Exception as e:
-            return f"Error in Coder Agent: {str(e)}"
+            return f"Coding agent error: {str(e)}"
 
+    # ---------------------------------------------------------
+    # RESEARCH AGENT
+    # ---------------------------------------------------------
     async def perform_research(self, query: str) -> str:
-        """Uses the Pro model with web search capabilities to answer complex questions."""
-        system_instruction = """You are SUVI's Research Agent.
-You have access to vast knowledge and search tools.
-Provide accurate, factual, and synthesized information based on the user's query."""
-
+        system_instruction = """
+You are SUVI's research assistant.
+Provide accurate factual answers.
+Be concise but informative.
+"""
         try:
-            # Note: We enable Google Search tool for the Pro model here
             response = await self.client.aio.models.generate_content(
                 model=self.MODEL_ID,
                 contents=query,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    tools=[types.Tool(google_search=types.GoogleSearchRetrieval())],
-                    temperature=0.0
+                    temperature=0.2
                 )
             )
             return response.text
         except Exception as e:
-            return f"Error in Research Agent: {str(e)}"
+            return f"Research agent error: {str(e)}"
 
+    # ---------------------------------------------------------
+    # DESKTOP TASK PLANNER
+    # ---------------------------------------------------------
     async def plan_complex_task(self, intent: str, env_context: str = "") -> str:
-        """
-        Breaks down a complex user intent into a step-by-step plan
-        that the Desktop Agent can follow.
-        """
-        # Build the prompt with environment context
         env_section = f"""
-CURRENT USER ENVIRONMENT:
+CURRENT USER ENVIRONMENT
 {env_context}
-
-IMPORTANT: Use the above environment info to create a realistic plan.
-If an app is NOT in the installed apps list, either:
-- Use an alternative app that's installed, OR
-- Use the default browser to access a web-based version
-
+If an application is not installed, use the browser alternative.
 """ if env_context else ""
 
-        prompt = f"""You are the SUVI Orchestrator.
-Your job is to take a vague user intent and break it down into an EXACT, linear step-by-step plan for a Computer Use AI Automation Agent operating a Windows desktop.
+        prompt = f"""
+You are SUVI's automation planner.
+Convert the user request into a clear step-by-step plan for a desktop automation agent.
+
 {env_section}
-USER INTENT: {intent}
 
-RULES:
-1. Provide ONLY the step-by-step plan. No introductory or concluding text (e.g. do not say "Here is a breakdown").
-2. DO NOT provide options or alternative scenarios (e.g. NO "Scenario A" vs "Scenario B"). Choose the most direct path and stick to it.
-3. Address the plan directly to the execution agent.
-4. Keep the steps sequential and specific (e.g., "1. Launch Chrome.", "2. Click the address bar and navigate to YouTube").
-5. NEVER assume an app is installed unless it's listed in the environment info above."""
+USER INTENT:
+{intent}
 
+Rules:
+1. Output ONLY numbered steps.
+2. Do NOT explain anything.
+3. Do NOT provide options.
+4. Use realistic UI actions.
+"""
         try:
             response = await self.client.aio.models.generate_content(
                 model=self.MODEL_ID,
@@ -94,5 +137,5 @@ RULES:
                 )
             )
             return response.text
-        except Exception as e:
-            return intent # Fallback to original intent if planning fails
+        except Exception:
+            return intent
