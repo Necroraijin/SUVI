@@ -42,6 +42,10 @@ app.add_middleware(
 # Include routers
 app.include_router(ws_proxy.router, prefix="/ws")
 
+@app.get("/")
+async def root():
+    return {"message": "SUVI Gateway is running", "status": "ok"}
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "project_id": os.getenv("GCP_PROJECT_ID")}
