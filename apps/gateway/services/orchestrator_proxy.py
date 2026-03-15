@@ -10,9 +10,8 @@ class OrchestratorProxy:
     def __init__(self, api_key: str):
         self.client = genai.Client(
             api_key=api_key,
-            http_options={'api_version': 'v1alpha'}
         )
-        self.model_id = "gemini-3.1-pro-preview"
+        self.model_id = "gemini-3.1-pro-preview" # gemini-2.0-flash-001
 
     async def get_plan(self, intent: str, env_context: str = "") -> str:
         """Asks the orchestrator to break down a complex task."""

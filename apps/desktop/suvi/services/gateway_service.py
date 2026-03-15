@@ -10,7 +10,7 @@ class GatewayService:
     """
     def __init__(self):
         self.ws = None
-        self.gateway_url = os.getenv("GATEWAY_URL", "ws://localhost:8080/ws/session")
+        self.gateway_url = os.getenv("GATEWAY_URL", "wss://suvi-google-gemini-live-hackathon-722150734142.us-central1.run.app/ws/session")
         self.token = "mock_token" # In reality, fetched from AuthService
         self.session_id = "default_session"
         self._pending_queries = {}
