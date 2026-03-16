@@ -9,7 +9,7 @@ class FirestoreService:
     """
     def __init__(self):
         self.project_id = os.getenv("GCP_PROJECT_ID", "project-0d0747b3-f100-478f-9b6")
-        # Explicitly pass the project to ensure we don't default to the 'Primary' account's project
+        
         try:
             self.db = firestore.AsyncClient(project=self.project_id)
             print(f"🔥 Firestore Service initialized for project: {self.project_id}")

@@ -5,7 +5,7 @@ import time
 from PIL import Image
 
 class ScreenWorker(QThread):
-    # Emits raw JPEG bytes to the main thread
+    
     frame_captured = pyqtSignal(bytes)
 
     def __init__(self):
@@ -28,10 +28,10 @@ class ScreenWorker(QThread):
             buf = io.BytesIO()
             img.save(buf, "JPEG", quality=85)
             
-            # Safely emit to the Qt Event Loop
+            
             self.frame_captured.emit(buf.getvalue())
             
-            # Capture at ~2 FPS for efficiency to not overwhelm the system
+            
             time.sleep(0.5)
 
     def stop(self):

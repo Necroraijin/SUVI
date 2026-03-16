@@ -34,7 +34,7 @@ class GatewayService:
         try:
             self.ws = await websockets.connect(
                 url,
-                ping_interval=None,  # we handle ping manually
+                ping_interval=None,  
                 max_size=10_000_000
             )
             print("✅ Connected to Gateway.")
@@ -75,7 +75,7 @@ class GatewayService:
                         if not future.done():
                             future.set_result(data.get("result", ""))
                 elif msg_type == "ping":
-                    # gateway heartbeat
+                    
                     pass
                 else:
                     print("📥 Gateway message:", data)

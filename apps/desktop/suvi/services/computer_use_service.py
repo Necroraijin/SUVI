@@ -37,7 +37,7 @@ class ComputerUseService(QObject):
 
     def _capture_screen(self) -> bytes:
         with mss.mss() as sct:
-            # Note: capturing monitor 1 may vary per system.
+            
             frame = sct.grab(sct.monitors[1])
 
         img = Image.frombytes("RGB", frame.size, frame.bgra, "raw", "BGRX")
@@ -180,7 +180,7 @@ class ComputerUseService(QObject):
 
                 print(f"Executing {action_name} {args}")
 
-                # Optional: trigger on_action callback
+                
                 if on_action:
                     on_action(f"Executing {action_name}")
 

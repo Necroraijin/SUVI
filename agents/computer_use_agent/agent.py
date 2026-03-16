@@ -18,7 +18,6 @@ class ComputerUseAgent:
             "model": self.MODEL_ID,
             "system_instruction": self.system_instruction,
             "tools": [
-                # In A2A, this agent calls the 'executor' tools on the client
                 "click_at", "right_click_at", "double_click_at", 
                 "drag_to", "type_text_at", "press_key", "scroll_document",
                 "voice_confirmation"

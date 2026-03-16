@@ -7,7 +7,6 @@ class MemoryTool:
 
     async def search(self, query: str, user_id: str) -> str:
         """Search memory for relevant context."""
-        # Simple implementation for now: fetch last 5 messages
         try:
             docs = self.db.collection("sessions").where("user_id", "==", user_id).order_by("started_at", direction=firestore.Query.DESCENDING).limit(5).stream()
             context = []

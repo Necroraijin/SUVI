@@ -7,7 +7,7 @@ class ReplayWorker(QThread):
     Accumulates screenshots during a task and saves them as an animated GIF.
     This serves as visual proof of the AI's actions for the hackathon submission.
     """
-    replay_saved = pyqtSignal(str)   # Emits the local file path (or Cloud Storage URL)
+    replay_saved = pyqtSignal(str)   
 
     def __init__(self):
         super().__init__()
@@ -23,7 +23,7 @@ class ReplayWorker(QThread):
         """Called whenever a new screenshot is captured during the Vision loop."""
         try:
             img = Image.open(io.BytesIO(image_bytes))
-            # Optional: Resize even further to keep GIF size reasonable
+           
             img.thumbnail((800, 600), Image.Resampling.LANCZOS)
             self._frames.append(img)
         except Exception as e:
@@ -36,7 +36,7 @@ class ReplayWorker(QThread):
 
         print(f"🎬 Compiling {len(self._frames)} frames into SUVI Replay...")
         
-        # Save to a temporary local file
+        
         import tempfile
         import os
         
@@ -48,13 +48,13 @@ class ReplayWorker(QThread):
                 gif_path,
                 save_all=True,
                 append_images=self._frames[1:],
-                duration=600,   # 600ms per frame
+                duration=600,   
                 loop=0,
                 optimize=True,
             )
             print(f"✅ Replay saved to: {gif_path}")
             
-            # Upload to Google Cloud Storage
+            
             try:
                 from google.cloud import storage
                 import os
@@ -74,11 +74,10 @@ class ReplayWorker(QThread):
                     blob.upload_from_filename(gif_path)
                     
                     try:
-                        # Try to generate a signed URL (works if using a real Service Account)
+                        
                         url = blob.generate_signed_url(expiration=3600)
                     except Exception as sign_err:
-                        # If using ADC (Application Default Credentials), signing fails.
-                        # Fallback to standard storage URL
+                        
                         url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
                         print(f"⚠️ Could not sign URL (likely using ADC). Returning standard link.")
                         
@@ -94,6 +93,5 @@ class ReplayWorker(QThread):
             print(f"❌ Failed to save replay GIF: {e}")
 
     def run(self):
-        # The actual heavy lifting is done in save_replay, which can block if large.
-        # Running it in this thread prevents the UI from freezing.
+        
         self.save_replay()

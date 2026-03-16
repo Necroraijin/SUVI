@@ -13,7 +13,7 @@ class AuthService:
         self.id_token = None
         self.refresh_token = None
         
-        # Identity Toolkit prefers the Firebase-specific key from the SUVI project
+        
         self.api_key = os.getenv("FIREBASE_API_KEY") or os.getenv("GEMINI_API_KEY")
         self.expected_project = os.getenv("GCP_PROJECT_ID", "project-0d0747b3-f100-478f-9b6")
         self.base_url = "https://identitytoolkit.googleapis.com/v1/accounts"

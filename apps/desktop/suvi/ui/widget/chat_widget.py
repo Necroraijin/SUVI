@@ -8,14 +8,14 @@ class ChatWidget(QWidget):
     The main floating, always-on-top UI for SUVI.
     Provides visual feedback on state, shows transcripts, and offers text chat and session controls.
     """
-    # Signals emitted by UI interactions
+    
     interrupt_requested = pyqtSignal()
-    session_toggle_requested = pyqtSignal(bool) # True = Start, False = Stop
+    session_toggle_requested = pyqtSignal(bool) 
     text_submitted = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
-        # Frameless, always on top, and doesn't show in the Alt+Tab task switcher
+        
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
@@ -29,7 +29,7 @@ class ChatWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # Container QFrame to hold the styling (rounded corners, dark translucent background)
+        
         self.container = QFrame(self)
         self.container.setObjectName("MainContainer")
         self.container.setStyleSheet("""
@@ -40,7 +40,7 @@ class ChatWidget(QWidget):
             }
         """)
         
-        # Add soft drop shadow for floating effect
+        
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(30)
         shadow.setColor(QColor(0, 0, 0, 180))
@@ -53,7 +53,7 @@ class ChatWidget(QWidget):
         # --- Top Row: Status & Toggle ---
         header_layout = QHBoxLayout()
 
-        # Close button (X) - top left
+        
         self.close_btn = QPushButton("✕", self.container)
         self.close_btn.setFixedSize(24, 24)
         self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -177,7 +177,7 @@ class ChatWidget(QWidget):
     def _on_close_clicked(self):
         """Close/hide the overlay"""
         self.hide()
-        # Emit signal so main app knows to show panel
+        
         self.interrupt_requested.emit()
 
     def _on_toggle_clicked(self):
@@ -195,7 +195,7 @@ class ChatWidget(QWidget):
     def _submit_text(self):
         text = self.text_input.text().strip()
         if text:
-            # If session is not active, start it first
+            
             if not self.is_session_active:
                 self._on_toggle_clicked()
             self.text_submitted.emit(text)
@@ -216,7 +216,7 @@ class ChatWidget(QWidget):
     def update_state(self, state: str):
         """Update the visual indicator based on SUVI's current phase."""
         if state in ["idle", "error"] and self.is_session_active and state != "idle":
-            # If backend forces stop
+            
             self.is_session_active = False
             self.toggle_btn.setText("▶ Start")
             self.toggle_btn.setStyleSheet("background-color: #03DAC6; color: #000; border-radius: 10px; font-weight: bold;")

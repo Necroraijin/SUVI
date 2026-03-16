@@ -18,12 +18,11 @@ class VoiceWorker(QThread):
 
         self._running = False
 
-        # Gemini Live requirements
+        
         self.sample_rate = 16000
         self.chunk_ms = 100
         self.chunk_samples = int(self.sample_rate * self.chunk_ms / 1000)
 
-    # -----------------------------------------------------
     def run(self):
         self._running = True
 
@@ -55,7 +54,6 @@ class VoiceWorker(QThread):
         if retry_count >= 3:
             print("❌ [VoiceWorker] Failed to open microphone.")
 
-    # -----------------------------------------------------
     def _audio_callback(self, indata, frames, time, status):
         if not self._running:
             raise sd.CallbackStop()
@@ -69,7 +67,7 @@ class VoiceWorker(QThread):
         pcm_chunk = (indata[:, 0] * 32767).astype(np.int16).tobytes()
         self.audio_chunk_captured.emit(pcm_chunk)
 
-    # -----------------------------------------------------
+    
     def stop(self):
         self._running = False
 

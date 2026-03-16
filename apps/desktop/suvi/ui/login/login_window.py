@@ -15,7 +15,7 @@ class LoginWindow(QWidget):
     The main desktop application window for SUVI.
     Handles user authentication and configuration.
     """
-    ready_to_start = pyqtSignal(dict) # carries settings dict
+    ready_to_start = pyqtSignal(dict) 
     
     def __init__(self):
         super().__init__()
@@ -174,7 +174,7 @@ class LoginWindow(QWidget):
         # Show the window by default
         self.show()
         
-        # Use a QTimer to allow the window to render completely before checking auto-login
+        
         QTimer.singleShot(100, self._load_current_settings)
 
     def _get_nav_style(self, active):
@@ -211,8 +211,7 @@ class LoginWindow(QWidget):
                 "USER_NAME": saved_name,
                 "ID_TOKEN": saved_token
             }
-            # Instead of QTimer, we just emit immediately. The App handles the hide/show logic.
-            # We delay slightly to allow __main__ to hook up the signal.
+            
             asyncio.get_event_loop().call_later(0.5, lambda: self.ready_to_start.emit(settings))
             asyncio.get_event_loop().call_later(0.5, self.hide)
         else:

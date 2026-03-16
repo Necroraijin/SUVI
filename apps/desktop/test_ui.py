@@ -5,7 +5,7 @@ import qasync
 from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtWidgets import QApplication
 
-# Ensure project root is in path
+
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
@@ -28,7 +28,7 @@ async def run_ui_demo(widget: ChatWidget):
         print(f"State: {state} | Text: {transcript}")
         widget.update_state(state)
         widget.update_transcript(transcript)
-        await asyncio.sleep(2.5) # Wait a bit before next state
+        await asyncio.sleep(2.5) 
         
     print("Demo loop finished. You can drag the widget around. Click Stop to exit.")
 
@@ -51,7 +51,7 @@ def main():
     
     # 5. Run the asyncio event loop with the demo sequence
     with loop:
-        # We use ensure_future to run the demo without blocking the UI rendering
+        
         asyncio.ensure_future(run_ui_demo(widget))
         loop.run_forever()
 

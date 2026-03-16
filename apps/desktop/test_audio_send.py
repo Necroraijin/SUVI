@@ -21,8 +21,7 @@ async def test():
                 media_chunks=[types.Blob(data=b'000', mime_type='audio/pcm;rate=16000')]
             ))
             print("Audio sent. Waiting for response...")
-            # Try with the raw dict format if the above fails?
-            # await session.send(input={"data": b'000', "mime_type": "audio/pcm;rate=16000"})
+            
     except Exception as e:
         print('ERROR:', type(e), e)
 

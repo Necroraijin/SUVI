@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import QApplication
 import qasync
 import sounddevice as sd
 
-# Ensure project root and suvi module can be imported
+
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
@@ -201,7 +201,7 @@ def main():
     # Run Controller loop
     with loop:
         try:
-            # ensure_future allows the Qt event loop to keep running
+            
             asyncio.ensure_future(controller.run())
             loop.run_forever()
         except KeyboardInterrupt:

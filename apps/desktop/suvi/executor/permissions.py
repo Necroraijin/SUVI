@@ -21,8 +21,6 @@ def get_action_risk(action_name: str, args: dict) -> RiskLevel:
     # Moderate commands
     moderate_keywords = ["delete", "remove", "uninstall", "settings", "control panel"]
     if action_name == "click_at" or action_name == "click":
-        # We can't always know what's being clicked just from coordinates, 
-        # but the ComputerUse model often provides a 'reason' or 'label' in thought.
         pass
         
     return RiskLevel.SAFE

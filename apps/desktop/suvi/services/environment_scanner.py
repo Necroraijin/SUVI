@@ -27,12 +27,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 
-# ═══════════════════════════════════════════════════════════════════
-# CAPABILITY KNOWLEDGE BASE
-# Maps known application names (lowercase) to their capabilities.
-# This is how SUVI knows "Spotify" is a music player.
-# ═══════════════════════════════════════════════════════════════════
-
 APP_CAPABILITY_MAP: Dict[str, List[str]] = {
     # ── Browsers ──
     "google chrome": ["browser"],
@@ -169,7 +163,6 @@ class EnvironmentScanner:
         self._last_scan_time: float = 0
         self._scan_interval = 300  # Re-scan every 5 minutes max
         
-        # Ensure data directory exists
         SUVI_DATA_DIR.mkdir(parents=True, exist_ok=True)
     
     # ═══════════════════════════════════════════════════════════════
@@ -186,16 +179,16 @@ class EnvironmentScanner:
         Returns:
             Dict with all environment data.
         """
-        # Check if we have a recent scan
+       
         if not force and self._env_data and (time.time() - self._last_scan_time) < self._scan_interval:
             return self._env_data
         
-        # Try to load from cache first (fast startup)
+        
         if not force and ENVIRONMENT_CACHE_PATH.exists():
             try:
                 cached = json.loads(ENVIRONMENT_CACHE_PATH.read_text(encoding="utf-8"))
                 cache_age = time.time() - cached.get("scan_timestamp", 0)
-                # Use cache if less than 1 hour old
+                
                 if cache_age < 3600:
                     self._env_data = cached
                     self._last_scan_time = cached.get("scan_timestamp", time.time())
@@ -204,7 +197,7 @@ class EnvironmentScanner:
             except Exception as e:
                 print(f"⚠️ [EnvScanner] Cache read failed: {e}")
 
-        # Perform fresh scan
+        
         print("🔍 [EnvScanner] Scanning system environment...")
         start = time.time()
         
@@ -287,11 +280,11 @@ class EnvironmentScanner:
         lines.append(f"Default Browser: {env.get('default_browser', 'Unknown')}")
         lines.append("")
         
-        # Capabilities (most useful for the model)
+        
         caps = env.get("capabilities", {})
         if caps:
             lines.append("AVAILABLE CAPABILITIES:")
-            # Priority order: most commonly needed first
+            
             priority_caps = [
                 "browser", "music_player", "video_player", "communication",
                 "code_editor", "text_editor", "document_editor", "terminal",
@@ -302,7 +295,7 @@ class EnvironmentScanner:
                     apps_str = ", ".join(caps[cap])
                     lines.append(f"  {cap}: {apps_str}")
             
-            # Any remaining capabilities
+           
             for cap, apps in sorted(caps.items()):
                 if cap not in priority_caps:
                     apps_str = ", ".join(apps)
@@ -360,7 +353,7 @@ class EnvironmentScanner:
                             try:
                                 name = winreg.QueryValueEx(subkey, "DisplayName")[0]
                                 if name and len(name) > 1:
-                                    # Filter out updates, drivers, and internal tools
+                                
                                     skip_keywords = [
                                         "update", "driver", "redistributable", "runtime",
                                         "sdk", ".net", "visual c++", "hotfix", "kb",
@@ -394,7 +387,6 @@ class EnvironmentScanner:
                     for f in files:
                         if f.endswith(".lnk"):
                             name = f.replace(".lnk", "").strip()
-                            # Filter out uninstallers and internal tools
                             if not any(kw in name.lower() for kw in ["uninstall", "readme", "help", "license", "website"]):
                                 apps.add(name)
         
@@ -480,25 +472,20 @@ class EnvironmentScanner:
         for app in installed_apps:
             app_lower = app.lower()
             
-            # Check exact match first
+            
             matched_caps = []
             
             if app_lower in APP_CAPABILITY_MAP:
                 matched_caps = APP_CAPABILITY_MAP[app_lower]
             else:
-                # Strict fuzzy match: the known app must match as a whole word
-                # e.g., "brave" should NOT match "BLEACH Brave Souls"
-                # but "opera gx" SHOULD match "Opera GX Browser"
+                
                 for known_app, caps in APP_CAPABILITY_MAP.items():
-                    # The known app name must appear at the START of the installed app name,
-                    # or the installed app must be a well-known exact form
+                    
                     if app_lower.startswith(known_app) or known_app.startswith(app_lower):
                         matched_caps = caps
                         break
-                    # Also check if known_app matches as standalone words in app_lower
-                    # "opera gx" in "opera gx stable 128.0.5807.71" ✅
-                    # "brave" in "bleach brave souls" ❌ (brave isn't at word start)
-                    if len(known_app) >= 4:  # Only fuzzy match names of reasonable length
+                    
+                    if len(known_app) >= 4:  
                         pattern = r'(?:^|\b)' + re.escape(known_app) + r'(?:\b|$)'
                         if re.search(pattern, app_lower) and app_lower.startswith(known_app.split()[0]):
                             matched_caps = caps
@@ -510,8 +497,7 @@ class EnvironmentScanner:
                 if app not in capabilities[cap]:
                     capabilities[cap].append(app)
         
-        # Deduplicate: keep only the shortest/primary name per capability
-        # e.g., "VLC media player" wins over "VLC media player skinned"
+        
         for cap in capabilities:
             apps = capabilities[cap]
             if len(apps) > 1:
@@ -519,8 +505,7 @@ class EnvironmentScanner:
                 for app in sorted(apps, key=len):
                     is_variant = False
                     for existing in deduped:
-                        # Two apps are "variants" only if the shorter one is
-                        # a prefix of the longer one (same product, different edition)
+                        
                         shorter = existing.lower() if len(existing) < len(app) else app.lower()
                         longer = app.lower() if len(existing) < len(app) else existing.lower()
                         if longer.startswith(shorter):
@@ -557,7 +542,7 @@ class EnvironmentScanner:
         if sys.platform == "win32":
             try:
                 import winreg
-                # Check UserChoice in the registry
+                
                 key = winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
                     r"SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
@@ -578,9 +563,9 @@ class EnvironmentScanner:
                     if key_part.lower() in prog_id.lower():
                         return name
                 
-                return prog_id  # Return raw if unknown
+                return prog_id  
             except Exception:
-                return "Microsoft Edge"  # Windows default fallback
+                return "Microsoft Edge"  
         
         elif sys.platform == "darwin":
             try:
@@ -620,7 +605,7 @@ class EnvironmentScanner:
                 )
                 for line in result.stdout.strip().split("\n"):
                     if line:
-                        # CSV format: "process.exe","PID",...
+                        
                         name = line.split(",")[0].strip('"').replace(".exe", "")
                         if name and len(name) > 2:
                             processes.add(name)

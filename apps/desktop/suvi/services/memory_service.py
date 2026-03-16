@@ -15,7 +15,7 @@ class MemoryService:
         self.local_persona_cache = {}
         
         try:
-            # Only attempt to initialize if we aren't in a mock environment
+            
             if os.getenv("MOCK_AUTH") != "true":
                 self.db = firestore.AsyncClient(project=self.project_id)
                 print(f"📡 Firestore initialized for project: {self.project_id}")

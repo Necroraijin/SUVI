@@ -45,7 +45,7 @@ class SUVIApplication:
         self.wake_word_worker = WakeWordWorker()
         self.replay_worker = ReplayWorker()
         
-        # Audio output stream for TTS playback
+        
         self.speaker_stream = sd.RawOutputStream(
             samplerate=24000,
             channels=1,
@@ -121,12 +121,12 @@ class SUVIApplication:
 
     def _setup_system_tray(self):
         """Setup system tray icon with menu"""
-        # Create tray icon
+        
         self.tray_icon = QSystemTrayIcon()
 
-        # Create a simple icon (purple circle for SUVI)
+        
         icon = QIcon()
-        # Use a simple colored icon
+        
         from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.GlobalColor.transparent)
@@ -139,7 +139,7 @@ class SUVIApplication:
         self.tray_icon.setIcon(icon)
         self.tray_icon.setToolTip("SUVI - Voice Assistant")
 
-        # Create context menu
+        
         menu = QMenu()
 
         show_panel = QAction("📋 Open SUVI Panel")
@@ -158,7 +158,7 @@ class SUVIApplication:
 
         self.tray_icon.setContextMenu(menu)
 
-        # Double-click to show panel
+        
         self.tray_icon.activated.connect(self._on_tray_double_click)
 
         self.tray_icon.show()
@@ -224,7 +224,7 @@ class SUVIApplication:
             asyncio.create_task(self.live_service.start(user_profile=self.user_persona))
 
     def _on_mic_audio(self, pcm_chunk: bytes):
-        # Prevent self-interruption (Echo loop): Do not send mic data if SUVI is speaking
+        
         if self.live_service and self._current_state != "speaking":
             asyncio.create_task(self.live_service.send_audio_chunk(pcm_chunk))
 
@@ -235,19 +235,19 @@ class SUVIApplication:
         if text.strip():
             self.ui.update_transcript(text)
             
-            # Pipe voice confirmation back to ComputerUse if active
+            
             if is_final and self._expecting_voice_confirmation and self.computer_service:
                 print(f"🎙️ Captured voice confirmation answer: {text}")
                 self.computer_service.set_voice_response(text)
                 self._expecting_voice_confirmation = False
 
-            # Guard: don't re-trigger while a task is already running
+            
             if getattr(self, '_is_executing', False):
                 return
 
-            # ── Special commands for SUVI Panel ──
+            
             text_lower = text.lower()
-            # Check for panel commands
+            
             if any(phrase in text_lower for phrase in ["open suvi panel", "show panel", "show suvi settings", "open settings"]):
                 print("🖥️ Opening SUVI Panel...")
                 self.show_panel()
@@ -260,20 +260,11 @@ class SUVIApplication:
 
             import re
             
-            # ══════════════════════════════════════════════════════════
-            # INTENT DETECTION — extract WHAT the user wants done
-            # The native audio model outputs "thinking" text with headers
-            # like **Confirming Action: YouTube Playback** and phrases
-            # like "the user intends to open Chrome"
-            # ══════════════════════════════════════════════════════════
+            
             trigger_found = False
             intent = ""
-            # ── Method 1: Exact trigger text (case-insensitive) ──────
-            # We strictly rely on the [CALL_TOOL: execute_computer_task] syntax
-            # to prevent hallucinating intents from internal model thought headers.
-
-            # First, strip markdown headers like **Thinking** etc before processing
-            text_clean = re.sub(r'\*+[^*]+\*+', '', text)  # Remove **markdown headers**
+           
+            text_clean = re.sub(r'\*+[^*]+\*+', '', text)  
 
             trigger_pattern = re.search(r'\[call_tool\s*:\s*execute_computer_task\]', text_clean, re.IGNORECASE)
             if trigger_pattern:
@@ -283,19 +274,19 @@ class SUVIApplication:
                 after = text_clean[trigger_end:].strip()
                 before = text_clean[:trigger_start].strip()
 
-                # Try to extract intent from AFTER the trigger first
+                
                 intent = ""
                 after_clean = re.sub(r'^[`\s:.\-"\'>]+', '', after).strip()
 
                 if after_clean and len(after_clean) >= 3:
-                    # Text after trigger - take first sentence/phrase
+                    
                     intent = re.split(r'[.!]', after_clean)[0].strip()
 
-                # If no intent after trigger, try BEFORE the trigger (the actual command)
+                
                 if not intent or len(intent) < 3:
-                    # Look for verb + object pattern in the text BEFORE trigger
+                    
                     full_text = (before + " " + after).lower()
-                    full_text = re.sub(r'\*+', '', full_text)  # Remove markdown
+                    full_text = re.sub(r'\*+', '', full_text)  
                     verb_match = re.search(
                         r'\b(open|launch|start|play|search for|search|close|navigate|go to|browse to|browse|type|click|create|delete|run|write|read|save|delete)\s+([a-z][a-z0-9 ]{2,50})',
                         full_text
@@ -304,20 +295,20 @@ class SUVIApplication:
                         intent = f"{verb_match.group(1)} {verb_match.group(2)}".strip()
                         intent = re.split(r'[.,!;]', intent)[0].strip()
 
-                # Clean up intent - remove trailing quotes, punctuation, backticks
+                
                 if intent:
-                    intent = re.sub(r'["\'\`]+$', '', intent).strip()  # Remove trailing quotes/backticks
-                    intent = re.sub(r'^["\'\`]+', '', intent).strip()  # Remove leading quotes
+                    intent = re.sub(r'["\'\`]+$', '', intent).strip()  
+                    intent = re.sub(r'^["\'\`]+', '', intent).strip()  
 
-                # Last resort: look for quoted text anywhere
+                
                 if not intent or len(intent) < 3:
                     quoted = re.findall(r'["\u201c]([^"\u201d]{3,50})["\u201d]', text_clean, re.IGNORECASE)
                     if quoted:
                         intent = quoted[0]
 
-                # ULTIMATE FALLBACK: Look for common command patterns anywhere in original text
+               
                 if not intent or len(intent) < 5:
-                    # Find any complete command pattern
+                    
                     command_patterns = [
                         r'\b(write\s+(?:a\s+)?(?:story|note|message|text|email|letter|code|function|list|content)\s+(?:in|on|using|with)\s+\w+)',
                         r'\b(open|launch|start|play|search\s+for|search|close|navigate|go\s+to|browse|type|click|create|delete|run|read|save)\s+[a-z][a-z0-9\s]{2,40}',
@@ -335,7 +326,7 @@ class SUVIApplication:
                 print(f"   📝 Text before trigger: '{before[:80] if before else '(empty)'}'")
                 print(f"   📝 Final intent: '{intent}'")
             
-            # ── Method 2: "user intends to" phrase detection ─────────
+            
             if not trigger_found:
                 body_lower = re.sub(r'\*+', '', text.lower())
                 intent_match = re.search(
@@ -350,7 +341,7 @@ class SUVIApplication:
                     print(f"✅ Method 2 (user-intent phrase) matched. Intent: '{intent}'")
             
             if trigger_found and intent and len(intent) > 3:
-                # Deduplication: don't trigger the same intent twice in a row
+                
                 if not hasattr(self, '_last_triggered_intent'):
                     self._last_triggered_intent = ""
                     
@@ -376,8 +367,7 @@ class SUVIApplication:
         self.ui.update_state(state)
 
     def _on_tool_call(self, tool_name: str, args: dict, call_id: str):
-        # Note: Tool calling via JSON is disabled in the Live Config currently, 
-        # so this is a fallback in case Google enables it again.
+        
         self.ui.update_state("thinking")
         
         if tool_name == "execute_computer_task":
@@ -407,7 +397,7 @@ class SUVIApplication:
         if not self.orchestrator or not self.live_service: return
         result = await self.orchestrator.generate_coding_solution(prompt, lang)
         
-        # Tool responses are disabled, so we speak it instead
+        
         await self.live_service.speak_text(result)
 
     async def _run_research_agent(self, query: str, call_id: str):
@@ -427,15 +417,14 @@ class SUVIApplication:
             self.ui.update_transcript("Planning task...")
             print(f"\n🎯 [VisionLoop] Starting with intent: '{intent}'")
             
-            # Step 1: Plan the task — use gateway only if TRULY connected
-            # Get environment context first so both gateway and local orchestrator can use it
+            
             env_context = self.env_scanner.get_context_for_ai() if self.env_scanner else ""
-            refined_intent = intent  # default fallback
+            refined_intent = intent 
             try:
                 if self.gateway.is_connected:
                     print("  📡 Routing through Gateway...")
                     refined_intent = await self.gateway.query_orchestrator("plan", intent, env_context)
-                    # If gateway returned an error, fall through to local orchestrator
+                    
                     if refined_intent.startswith("Error:"):
                         print(f"  ⚠️ Gateway failed: {refined_intent}. Falling back to local.")
                         refined_intent = intent
@@ -448,12 +437,11 @@ class SUVIApplication:
                 print(f"  ⚠️ Planning failed: {plan_err}. Using raw intent.")
                 refined_intent = intent
                 
-            # If we successfully planned it, gently wrap it so the execution agent
-            # knows to blindly follow the steps, rather than just chat about it.
+            
             if refined_intent != intent:
                 refined_intent = f"Please blindly execute the following step-by-step plan to achieve this goal ('{intent}'). Do NOT describe the steps, just use tools to do them:\n\n{refined_intent}"
             
-            # Step 2: Execute the computer use vision loop
+            
             self.ui.update_state("executing")
             self.ui.update_transcript(f"Executing: {intent}")
             
@@ -471,7 +459,7 @@ class SUVIApplication:
                 on_screenshot=on_screenshot
             )
             
-            # Step 3: Log to memory (non-critical, don't let it break the flow)
+            
             try:
                 await self.memory.log_task_execution(
                     user_id=self.user_id,
@@ -483,14 +471,14 @@ class SUVIApplication:
             except Exception as mem_err:
                 print(f"  ⚠️ Memory logging failed (non-critical): {mem_err}")
             
-            # Step 4: Save replay (non-critical)
+            
             try:
                 if not self.replay_worker.isRunning():
                     self.replay_worker.start()
             except Exception as replay_err:
                 print(f"  ⚠️ Replay save failed (non-critical): {replay_err}")
             
-            # Step 5: Inform the user via speech
+            
             success = result.get('success', False)
             reason = result.get('reason', '')
             actions_count = len(result.get('actions_taken', []))
@@ -506,9 +494,9 @@ class SUVIApplication:
             self.ui.update_transcript(status_msg)
             self.ui.update_state("idle")
             self._is_executing = False
-            self._last_triggered_intent = ""  # Allow same intent to be re-triggered
+            self._last_triggered_intent = ""  
             
-            # Only speak if the live service is still running
+            
             if self.live_service and self.live_service._running:
                 await self.live_service.speak_text(status_msg)
             
@@ -525,13 +513,13 @@ class SUVIApplication:
     def _save_settings_to_env(self, settings: dict):
         """Persist settings to .env file for auto-login."""
         try:
-            # Read existing .env to preserve comments and other vars
+            
             env_lines = []
             if os.path.exists(".env"):
                 with open(".env", "r") as f:
                     env_lines = f.readlines()
 
-            # Update or add settings
+            
             env_vars = {
                 "GEMINI_API_KEY": settings.get("GEMINI_API_KEY", ""),
                 "GCP_PROJECT_ID": settings.get("GCP_PROJECT_ID", ""),
@@ -544,11 +532,11 @@ class SUVIApplication:
                     key = line.split("=")[0].strip() if "=" in line else ""
                     if key in env_vars:
                         f.write(f"{key}={env_vars[key]}\n")
-                        del env_vars[key] # Remove from dict so we don't duplicate
+                        del env_vars[key] 
                     else:
                         f.write(line)
                 
-                # Write any remaining new vars at the bottom
+                
                 for key, val in env_vars.items():
                     if val:
                         f.write(f"{key}={val}\n")
@@ -562,20 +550,20 @@ class SUVIApplication:
         print("🚀 [App] Launch requested with production settings.")
         self.user_id = settings.get("USER_ID")
         
-        # Save settings for next time
+        
         self._save_settings_to_env(settings)
         
         self.ui = ChatWidget()
         self.ui.show()
         self.ui.update_transcript("SUVI Initializing...")
         
-        # 1. Initialize core AI services
+        
         self.init_services(settings["GEMINI_API_KEY"], self.ui)
         
-        # 2. Setup connections
+        
         self._setup_connections()
 
-        # 3. Connect to Gateway with real token
+        
         token = settings.get("ID_TOKEN")
         if token:
             print(f"🔗 [App] Connecting to Gateway with token: {token[:15]}...")
@@ -584,7 +572,7 @@ class SUVIApplication:
                 token=token
             ))
         
-        # 4. Fetch User Persona & Memory
+        
         self.user_persona = await self.memory.get_user_persona(self.user_id)
         if not self.user_persona:
             self.user_persona = {"name": settings.get("USER_NAME", "User"), "role": "Friend"}
@@ -602,7 +590,7 @@ class SUVIApplication:
         self.login_window = LoginWindow()
         self.login_window.ready_to_start.connect(lambda s: asyncio.ensure_future(self._on_launch_requested(s)))
 
-        # Setup system tray
+        
         self._setup_system_tray()
 
         try:

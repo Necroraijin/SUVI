@@ -4,17 +4,17 @@ import sys
 from dotenv import load_dotenv
 from google import genai
 
-# Ensure suvi module can be imported
+
 sys.path.append(os.path.dirname(__file__))
 
 from suvi.services.computer_use_service import ComputerUseService
 
-# Load environment variables from .env
+
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 load_dotenv(os.path.join(root_dir, '.env'))
 
 async def main():
-    # Start with standard AI Studio key if available, else fallback
+    
     api_key = os.getenv("GEMINI_API_KEY")
     project_id = os.getenv("GCP_PROJECT_ID")
     location = os.getenv("GCP_LOCATION", "us-central1")

@@ -11,11 +11,11 @@ class OrchestratorProxy:
         self.client = genai.Client(
             api_key=api_key,
         )
-        self.model_id = "gemini-3.1-pro-preview" # gemini-2.0-flash-001
+        self.model_id = "gemini-3.1-pro-preview" 
 
     async def get_plan(self, intent: str, env_context: str = "") -> str:
         """Asks the orchestrator to break down a complex task."""
-        # Build the prompt with environment context
+        
         env_section = f"""
 CURRENT USER ENVIRONMENT:
 {env_context}
