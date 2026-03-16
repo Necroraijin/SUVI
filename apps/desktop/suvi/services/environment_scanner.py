@@ -684,7 +684,7 @@ if __name__ == "__main__":
     for app in env['installed_apps']:
         print(f"  - {app}")
     
-    print(f"\n🧠 Capabilities:")
+    print("\n🧠 Capabilities:")
     for cap, apps in sorted(env['capabilities'].items()):
         print(f"  {cap}: {', '.join(apps)}")
     

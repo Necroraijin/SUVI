@@ -1,5 +1,4 @@
 import os
-import google.cloud.logging
 from google.cloud import logging
 
 class ActionLogger:

@@ -15,7 +15,7 @@ from apps.desktop.suvi.app import SUVIApplication
 def main():
     
     load_dotenv(os.path.join(root_dir, '.env'))
-    api_key = os.getenv("GEMINI_API_KEY")
+    os.getenv("GEMINI_API_KEY")
     
     
     app = QApplication(sys.argv)

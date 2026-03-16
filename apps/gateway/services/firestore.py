@@ -18,7 +18,8 @@ class FirestoreService:
             self.db = None
 
     async def log_session_start(self, session_id: str, user_id: str):
-        if not self.db: return
+        if not self.db:
+            return
         doc_ref = self.db.collection("sessions").document(session_id)
         await doc_ref.set({
             "user_id": user_id,
@@ -27,7 +28,8 @@ class FirestoreService:
         })
 
     async def save_message(self, session_id: str, role: str, text: str):
-        if not self.db: return
+        if not self.db:
+            return
         doc_ref = self.db.collection("sessions").document(session_id).collection("messages").document()
         await doc_ref.set({
             "role": role,
@@ -36,7 +38,8 @@ class FirestoreService:
         })
 
     async def log_action(self, session_id: str, action_data: dict):
-        if not self.db: return
+        if not self.db:
+            return
         doc_ref = self.db.collection("sessions").document(session_id).collection("actions").document()
         await doc_ref.set({
             **action_data,

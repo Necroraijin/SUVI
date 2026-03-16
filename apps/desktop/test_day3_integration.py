@@ -1,13 +1,9 @@
 import asyncio
 import os
 import sys
-import uvicorn
-import json
-import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from PyQt6.QtCore import QCoreApplication
 from PyQt6.QtWidgets import QApplication
 import qasync
 import sounddevice as sd

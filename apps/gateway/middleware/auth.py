@@ -1,6 +1,6 @@
 import firebase_admin
 from firebase_admin import auth
-from fastapi import Request, HTTPException, WebSocket
+from fastapi import Request, HTTPException
 import os
 
 if not firebase_admin._apps:

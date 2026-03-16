@@ -20,7 +20,7 @@ async def test():
     for model in models:
         try:
             print(f"Testing {model}...")
-            async with client.aio.live.connect(model=model, config=config) as session:
+            async with client.aio.live.connect(model=model, config=config):
                 print(f"SUCCESS: {model} supports Live API!")
         except Exception as e:
             print(f"ERROR on {model}: {e}")

@@ -18,7 +18,7 @@ async def test():
                 )
             )
         )
-        async with client.aio.live.connect(model='gemini-2.5-flash', config=config) as session:
+        async with client.aio.live.connect(model='gemini-2.5-flash', config=config):
             print('SUCCESS: connected to gemini-2.5-flash via Vertex AI')
     except Exception as e:
         print('ERROR:', e)

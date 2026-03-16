@@ -1,6 +1,6 @@
 import asyncio
 import io
-from typing import Optional, List, Tuple, Dict
+from typing import List
 from google import genai
 from google.genai import types
 from google.genai.types import (
@@ -9,7 +9,6 @@ from google.genai.types import (
     Part,
     Tool
 )
-import pyautogui
 import mss
 from PIL import Image
 from PyQt6.QtCore import QObject, pyqtSignal

@@ -1,6 +1,3 @@
-import os
-from google import genai
-from google.genai import types
 
 from .tools.computer_use_tool import computer_use_tool
 from .tools.memory_tool import memory_tool

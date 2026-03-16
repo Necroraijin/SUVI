@@ -76,10 +76,10 @@ class ReplayWorker(QThread):
                     try:
                         
                         url = blob.generate_signed_url(expiration=3600)
-                    except Exception as sign_err:
+                    except Exception:
                         
                         url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
-                        print(f"⚠️ Could not sign URL (likely using ADC). Returning standard link.")
+                        print("⚠️ Could not sign URL (likely using ADC). Returning standard link.")
                         
                     print(f"🚀 Replay uploaded to GCS: {url}")
                     self.replay_saved.emit(url)

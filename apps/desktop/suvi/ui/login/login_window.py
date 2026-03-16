@@ -1,11 +1,10 @@
 import os
-import sys
 import asyncio
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, 
                              QPushButton, QHBoxLayout, QFrame, QStackedWidget,
                              QMessageBox, QGraphicsDropShadowEffect)
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QTimer
-from PyQt6.QtGui import QColor, QFont, QIcon
+from PyQt6.QtGui import QColor, QFont
 from dotenv import load_dotenv
 
 from apps.desktop.suvi.services.auth_service import AuthService
@@ -219,7 +218,8 @@ class LoginWindow(QWidget):
 
     async def _handle_login(self):
         email, password = self.email_input.text().strip(), self.pass_input.text().strip()
-        if not email or not password: return
+        if not email or not password:
+            return
         self.login_btn.setEnabled(False)
         self.login_btn.setText("Authenticating...")
         res = await self.auth_service.login(email, password)
@@ -235,7 +235,8 @@ class LoginWindow(QWidget):
 
     async def _handle_signup(self):
         email, password, name = self.signup_email.text().strip(), self.signup_pass.text().strip(), self.name_input.text().strip()
-        if not email or not password or not name: return
+        if not email or not password or not name:
+            return
         self.signup_btn.setEnabled(False)
         res = await self.auth_service.sign_up(email, password, name)
         if res["success"]:

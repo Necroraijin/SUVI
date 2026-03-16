@@ -50,7 +50,7 @@ class GeminiLiveService(QObject):
         self._running = True
         user_profile = user_profile or {}
 
-        profile_name = user_profile.get("name", "User")
+        user_profile.get("name", "User")
 
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],

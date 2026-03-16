@@ -19,7 +19,6 @@ def get_action_risk(action_name: str, args: dict) -> RiskLevel:
             return RiskLevel.DANGEROUS
             
     # Moderate commands
-    moderate_keywords = ["delete", "remove", "uninstall", "settings", "control panel"]
     if action_name == "click_at" or action_name == "click":
         pass
         

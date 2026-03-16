@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 from google import genai
 from google.genai import types
 import sounddevice as sd
@@ -73,7 +72,8 @@ class SUVIApplication:
             self.orchestrator = OrchestratorService(client)
         except Exception as e:
             print(f"❌ Critical Error initializing AI services: {e}")
-            if self.ui: self.ui.update_transcript(f"System Error: Failed to initialize AI services. {e}")
+            if self.ui:
+                self.ui.update_transcript(f"System Error: Failed to initialize AI services. {e}")
 
     def _setup_connections(self):
         # Wake Word
@@ -127,7 +127,7 @@ class SUVIApplication:
         
         icon = QIcon()
         
-        from PyQt6.QtGui import QPixmap, QPainter, QColor, QBrush
+        from PyQt6.QtGui import QColor
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
@@ -321,7 +321,7 @@ class SUVIApplication:
 
                 clean_text = re.sub(r'\[call_tool\s*:\s*execute_computer_task\]', '', text_clean, flags=re.IGNORECASE).strip()
                 self.ui.update_transcript(clean_text)
-                print(f"✅ Method 1 (exact trigger) matched.")
+                print("✅ Method 1 (exact trigger) matched.")
                 print(f"   📝 Text after trigger: '{after[:80] if after else '(empty)'}'")
                 print(f"   📝 Text before trigger: '{before[:80] if before else '(empty)'}'")
                 print(f"   📝 Final intent: '{intent}'")
@@ -394,24 +394,28 @@ class SUVIApplication:
                 ]))
 
     async def _run_coder_agent(self, prompt: str, lang: str, call_id: str):
-        if not self.orchestrator or not self.live_service: return
+        if not self.orchestrator or not self.live_service:
+            return
         result = await self.orchestrator.generate_coding_solution(prompt, lang)
         
         
         await self.live_service.speak_text(result)
 
     async def _run_research_agent(self, query: str, call_id: str):
-        if not self.orchestrator or not self.live_service: return
+        if not self.orchestrator or not self.live_service:
+            return
         result = await self.orchestrator.perform_research(query)
         await self.live_service.speak_text(result)
 
     async def _run_describe_screen(self, call_id: str):
-        if not self.computer_service or not self.live_service: return
+        if not self.computer_service or not self.live_service:
+            return
         description = await self.computer_service.describe_screen()
         await self.live_service.speak_text(description)
 
     async def _execute_vision_loop(self, intent: str, call_id: str):
-        if not self.computer_service: return
+        if not self.computer_service:
+            return
         
         try:
             self.ui.update_transcript("Planning task...")
@@ -450,7 +454,7 @@ class SUVIApplication:
             def on_screenshot(img_bytes):
                 self.replay_worker.add_frame(img_bytes)
 
-            print(f"  🚀 Calling ComputerUseService.execute_task()...")
+            print("  🚀 Calling ComputerUseService.execute_task()...")
             result = await self.computer_service.execute_task(
                 intent=refined_intent,
                 user_id=self.user_id,

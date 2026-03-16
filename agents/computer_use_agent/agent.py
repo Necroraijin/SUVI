@@ -1,4 +1,3 @@
-from google.genai import types
 from .system_prompt import COMPUTER_USE_SYSTEM_PROMPT
 
 class ComputerUseAgent:
