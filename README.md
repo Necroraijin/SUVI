@@ -111,7 +111,7 @@ graph TD
     %% Connections
     User <-->|Speaks / Hears| Voice
     User -->|Views / Clicks| UI_Chat
-    User -->|Says "Hey SUVI"| WW
+    User -->|Says Hey SUVI| WW
     
     UI_Login --> AS
     UI_Chat <--> Core
