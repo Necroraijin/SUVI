@@ -208,7 +208,7 @@ GATEWAY_URL="wss://suvi-google-gemini-live-hackathon-722150734142.us-central1.ru
 ### 4. Launch the App
 
 ```bash
-python -m suvi
+python -m apps.desktop.suvi
 ```
 
 * The SUVI chat widget will appear on your desktop.
